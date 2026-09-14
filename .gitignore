@@ -1,0 +1,16 @@
+node_modules/
+.next/
+out/
+.netlify/
+.data/
+
+.env
+.env.local
+.env*.local
+.env.production
+.env.development.local
+.env.development
+.env.test
+
+!.env.example
+

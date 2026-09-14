@@ -1,0 +1,25 @@
+{
+  "name": "lotus-ai-hair-salon-mirror",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "@fal-ai/client": "1.10.1",
+    "@mediapipe/tasks-vision": "1.0.1",
+    "next": "14.2.35",
+    "qrcode": "1.5.4",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "22.15.30",
+    "@types/qrcode": "1.5.5",
+    "@types/react": "18.3.23",
+    "@types/react-dom": "18.3.7",
+    "typescript": "5.8.3"
+  }
+}
