@@ -51,6 +51,7 @@ export default function HairMirrorApp() {
   const [maskDebug, setMaskDebug] = useState<{
     hardMask?: string;
     softMask?: string;
+    hairEditMask?: string;
   }>({});
   const [showDebug, setShowDebug] = useState(false);
   const [manualView, setManualView] = useState<HairView>("front");
@@ -250,7 +251,11 @@ export default function HairMirrorApp() {
     try {
       const nextResults: HairViewImages = {};
       const nextRawResults: HairViewImages = {};
-      let nextMaskDebug: { hardMask?: string; softMask?: string } = {};
+      let nextMaskDebug: {
+        hardMask?: string;
+        softMask?: string;
+        hairEditMask?: string;
+      } = {};
       for (let i = 0; i < CAPTURE_ORDER.length; i++) {
         const view = CAPTURE_ORDER[i];
         const generated = await generateOne(view, captures[view]!);
@@ -605,6 +610,16 @@ export default function HairMirrorApp() {
                             className="main"
                             src={maskDebug.softMask}
                             alt="Soft transition mask"
+                          />
+                        </div>
+                      )}
+                      {maskDebug.hairEditMask && (
+                        <div className="panel">
+                          <strong>HAIR EDIT MASK</strong>
+                          <img
+                            className="main"
+                            src={maskDebug.hairEditMask}
+                            alt="AI-priority scalp hair edit mask"
                           />
                         </div>
                       )}

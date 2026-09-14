@@ -7,12 +7,12 @@ type FaceData = {
   landmarks: Landmark[];
   bounds: Bounds;
 };
-type MaskDebug = { hardMask: string; softMask: string };
+type MaskDebug = { hardMask: string; softMask: string; hairEditMask: string };
 type IdentityQuality = { valid: boolean; score: number };
 
-const FACE_OUTLINE = [
-  10, 338, 297, 332, 284, 251, 389, 356, 454, 323, 361, 288, 397, 377, 152, 148,
-  172, 58, 132, 93, 234, 127, 162, 21, 54, 103, 67, 109,
+const HARD_FACE_OUTLINE = [
+  70, 63, 105, 66, 107, 336, 296, 334, 293, 300, 356, 323, 361, 288, 397, 377,
+  152, 148, 172, 58, 132, 93, 234, 127, 162, 21, 54,
 ];
 const QUALITY_POINTS = [
   33, 133, 159, 145, 263, 362, 386, 374, 70, 105, 336, 300, 1, 61, 291, 13, 14,
@@ -177,7 +177,7 @@ export async function validateFrontCapture(source: string) {
 }
 
 function drawFacePath(context: CanvasRenderingContext2D, face: FaceData) {
-  FACE_OUTLINE.forEach((index, position) => {
+  HARD_FACE_OUTLINE.forEach((index, position) => {
     const target = point(face.landmarks[index], face.image);
     if (position === 0) context.moveTo(target.x, target.y);
     else context.lineTo(target.x, target.y);
@@ -214,6 +214,38 @@ export function createFaceProtectionMask(
     );
     context.fill();
   });
+  return mask;
+}
+
+function createHairEditMask(width: number, height: number, face: FaceData) {
+  const mask = document.createElement("canvas");
+  mask.width = width;
+  mask.height = height;
+  const context = mask.getContext("2d");
+  if (!context) throw new Error("Hair edit mask is unavailable");
+  const { x, y, width: faceWidth, height: faceHeight } = face.bounds;
+  const browY =
+    (point(face.landmarks[70], face.image).y +
+      point(face.landmarks[300], face.image).y) /
+    2;
+  context.fillStyle = "white";
+  context.beginPath();
+  context.ellipse(
+    x + faceWidth / 2,
+    y + faceHeight * 0.24,
+    faceWidth * 0.78,
+    faceHeight * 0.98,
+    0,
+    Math.PI,
+    Math.PI * 2,
+  );
+  context.rect(
+    x - faceWidth * 0.62,
+    y - faceHeight * 0.78,
+    faceWidth * 2.24,
+    browY - (y - faceHeight * 0.78),
+  );
+  context.fill();
   return mask;
 }
 
@@ -281,6 +313,11 @@ export function featherComposite(original: FaceData, generated: FaceData) {
     original,
   );
   const softMask = createSoftTransitionMask(hardMask);
+  const hairEditMask = createHairEditMask(
+    output.width,
+    output.height,
+    original,
+  );
   const protectedFace = document.createElement("canvas");
   protectedFace.width = output.width;
   protectedFace.height = output.height;
@@ -290,11 +327,36 @@ export function featherComposite(original: FaceData, generated: FaceData) {
   protectedContext.globalCompositeOperation = "destination-in";
   protectedContext.drawImage(softMask, 0, 0);
   context.drawImage(protectedFace, 0, 0);
+  context.save();
+  context.globalCompositeOperation = "source-over";
+  context.beginPath();
+  context.ellipse(
+    original.bounds.x + original.bounds.width / 2,
+    original.bounds.y + original.bounds.height * 0.24,
+    original.bounds.width * 0.78,
+    original.bounds.height * 0.98,
+    0,
+    Math.PI,
+    Math.PI * 2,
+  );
+  context.rect(
+    original.bounds.x - original.bounds.width * 0.62,
+    original.bounds.y - original.bounds.height * 0.78,
+    original.bounds.width * 2.24,
+    (point(original.landmarks[70], original.image).y +
+      point(original.landmarks[300], original.image).y) /
+      2 -
+      (original.bounds.y - original.bounds.height * 0.78),
+  );
+  context.clip();
+  context.drawImage(aligned, 0, 0);
+  context.restore();
   return {
     output,
     debug: {
       hardMask: hardMask.toDataURL("image/png"),
       softMask: softMask.toDataURL("image/png"),
+      hairEditMask: hairEditMask.toDataURL("image/png"),
     },
   };
 }
