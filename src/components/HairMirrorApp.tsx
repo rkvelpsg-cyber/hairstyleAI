@@ -9,7 +9,7 @@ import {
   type HeadOrientation,
 } from "@/hooks/useHeadOrientation";
 import { captureFrame } from "@/lib/image";
-import { lockFaceOnly } from "@/lib/faceLock";
+import { lockFaceOnly, validateFrontCapture } from "@/lib/faceLock";
 import { speak } from "@/lib/speech";
 import type {
   HairAudience,
@@ -47,6 +47,12 @@ export default function HairMirrorApp() {
   const [styleSearch, setStyleSearch] = useState("");
   const [color, setColor] = useState<HairColor>(hairColors[0]);
   const [results, setResults] = useState<HairViewImages>({});
+  const [rawResults, setRawResults] = useState<HairViewImages>({});
+  const [maskDebug, setMaskDebug] = useState<{
+    hardMask?: string;
+    softMask?: string;
+  }>({});
+  const [showDebug, setShowDebug] = useState(false);
   const [manualView, setManualView] = useState<HairView>("front");
   const [qr, setQr] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
@@ -138,6 +144,9 @@ export default function HairMirrorApp() {
     setStyleSearch("");
     setColor(hairColors[0]);
     setResults({});
+    setRawResults({});
+    setMaskDebug({});
+    setShowDebug(false);
     setManualView("front");
     setQr(null);
     setShareUrl(null);
@@ -165,6 +174,16 @@ export default function HairMirrorApp() {
     }
 
     const image = captureFrame(videoRef.current);
+    const quality = await validateFrontCapture(image);
+    if (!quality.valid) {
+      setError(
+        quality.message || "Please improve the capture quality and try again.",
+      );
+      speak(
+        quality.message || "Please improve the capture quality and try again.",
+      );
+      return;
+    }
     setCaptures((prev) => ({ ...prev, [expected]: image }));
     setError(null);
 
@@ -193,12 +212,17 @@ export default function HairMirrorApp() {
       throw new Error(data.error || `${VIEW_LABEL[view]} generation failed`);
     }
 
-    if (view === "back") return data.resultImage as string;
     const locked = await lockFaceOnly(image, data.resultImage);
-    if (!locked.applied && process.env.NODE_ENV === "production") {
-      throw new Error(`${VIEW_LABEL[view]} face lock could not be verified.`);
+    if (!locked.applied) {
+      throw new Error(
+        locked.message || "Result quality is low. Please try again.",
+      );
     }
-    return locked.image;
+    return {
+      final: locked.image,
+      raw: data.resultImage as string,
+      debug: locked.debug,
+    };
   }
 
   async function generate() {
@@ -225,13 +249,20 @@ export default function HairMirrorApp() {
 
     try {
       const nextResults: HairViewImages = {};
+      const nextRawResults: HairViewImages = {};
+      let nextMaskDebug: { hardMask?: string; softMask?: string } = {};
       for (let i = 0; i < CAPTURE_ORDER.length; i++) {
         const view = CAPTURE_ORDER[i];
-        nextResults[view] = await generateOne(view, captures[view]!);
+        const generated = await generateOne(view, captures[view]!);
+        nextResults[view] = generated.final;
+        nextRawResults[view] = generated.raw;
+        nextMaskDebug = generated.debug || nextMaskDebug;
         setProgress(Math.round(((i + 1) / CAPTURE_ORDER.length) * 100));
       }
 
       setResults(nextResults);
+      setRawResults(nextRawResults);
+      setMaskDebug(nextMaskDebug);
       setManualView("front");
       setLookCount((x) => x + 1);
 
@@ -523,6 +554,64 @@ export default function HairMirrorApp() {
                 />
                 <div className="liveViewPill">Front</div>
               </div>
+              {process.env.NODE_ENV !== "production" && (
+                <>
+                  <button
+                    className="btn secondary"
+                    onClick={() => setShowDebug((visible) => !visible)}
+                  >
+                    {showDebug ? "Hide Debug Images" : "Show Debug Images"}
+                  </button>
+                  {showDebug && (
+                    <div className="grid" style={{ marginTop: 16 }}>
+                      <div className="panel">
+                        <strong>ORIGINAL</strong>
+                        <img
+                          className="main"
+                          src={captures.front}
+                          alt="Original front capture"
+                        />
+                      </div>
+                      <div className="panel">
+                        <strong>RAW AI RESULT</strong>
+                        <img
+                          className="main"
+                          src={rawResults.front}
+                          alt="Raw AI result"
+                        />
+                      </div>
+                      <div className="panel">
+                        <strong>FACE-LOCKED FINAL RESULT</strong>
+                        <img
+                          className="main"
+                          src={results.front}
+                          alt="Face-locked final result"
+                        />
+                      </div>
+                      {maskDebug.hardMask && (
+                        <div className="panel">
+                          <strong>HARD IDENTITY MASK</strong>
+                          <img
+                            className="main"
+                            src={maskDebug.hardMask}
+                            alt="Hard identity protection mask"
+                          />
+                        </div>
+                      )}
+                      {maskDebug.softMask && (
+                        <div className="panel">
+                          <strong>SOFT BLEND MASK</strong>
+                          <img
+                            className="main"
+                            src={maskDebug.softMask}
+                            alt="Soft transition mask"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
 
             <aside className="panel">
@@ -572,7 +661,7 @@ export default function HairMirrorApp() {
                   Change Colour
                 </button>
                 <button className="btn secondary" onClick={beginCapture}>
-                  Retake 4 Views
+                  Retake Photo
                 </button>
               </div>
             </aside>
