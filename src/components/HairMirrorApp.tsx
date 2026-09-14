@@ -4,11 +4,20 @@ import QRCode from "qrcode";
 import { hairColors, hairStyles, retailProducts } from "@/data/catalog";
 import { useCamera } from "@/hooks/useCamera";
 import { usePresenceDetector } from "@/hooks/usePresenceDetector";
-import { useHeadOrientation, type HeadOrientation } from "@/hooks/useHeadOrientation";
+import {
+  useHeadOrientation,
+  type HeadOrientation,
+} from "@/hooks/useHeadOrientation";
 import { captureFrame } from "@/lib/image";
 import { lockFaceOnly } from "@/lib/faceLock";
 import { speak } from "@/lib/speech";
-import type { HairAudience, HairColor, HairStyle, HairView, HairViewImages } from "@/types";
+import type {
+  HairAudience,
+  HairColor,
+  HairStyle,
+  HairView,
+  HairViewImages,
+} from "@/types";
 
 type Screen =
   | "attract"
@@ -25,7 +34,7 @@ const VIEW_LABEL: Record<HairView, string> = {
   front: "Front",
   left: "Left Side",
   right: "Right Side",
-  back: "Back"
+  back: "Back",
 };
 
 export default function HairMirrorApp() {
@@ -47,19 +56,35 @@ export default function HairMirrorApp() {
   const last = useRef(Date.now());
 
   const { videoRef, streamRef, ready, error: cameraError, start } = useCamera();
-  const present = usePresenceDetector(videoRef.current, screen === "attract" && ready);
-  const trackingEnabled = ready && (screen === "capture" || screen === "result");
+  const present = usePresenceDetector(
+    videoRef.current,
+    screen === "attract" && ready,
+  );
+  const trackingEnabled =
+    ready && (screen === "capture" || screen === "result");
   const orientation = useHeadOrientation(videoRef, trackingEnabled);
 
-  const currentCapture = CAPTURE_ORDER[Math.min(captureIndex, CAPTURE_ORDER.length - 1)];
-  const liveView = (orientation.available ? orientation.orientation : manualView) as HairView;
-  const shownResult = results[liveView] || results.front || Object.values(results)[0] || null;
+  const currentCapture =
+    CAPTURE_ORDER[Math.min(captureIndex, CAPTURE_ORDER.length - 1)];
+  const liveView = (
+    orientation.available ? orientation.orientation : manualView
+  ) as HairView;
+  const shownResult =
+    results[liveView] || results.front || Object.values(results)[0] || null;
 
   const filteredStyles = useMemo(() => {
     const q = styleSearch.trim().toLowerCase();
     return hairStyles.filter((s) => {
-      const audienceOk = audience === "all" || s.audience === audience || s.audience === "unisex";
-      const searchOk = !q || [s.label, s.category, s.region || "", s.stylePrompt].join(" ").toLowerCase().includes(q);
+      const audienceOk =
+        audience === "all" ||
+        s.audience === audience ||
+        s.audience === "unisex";
+      const searchOk =
+        !q ||
+        [s.label, s.category, s.region || "", s.stylePrompt]
+          .join(" ")
+          .toLowerCase()
+          .includes(q);
       return audienceOk && searchOk;
     });
   }, [audience, styleSearch]);
@@ -67,9 +92,13 @@ export default function HairMirrorApp() {
   const recommended = useMemo(
     () =>
       retailProducts
-        .filter((p) => p.tags.includes(style?.falStyle || "") || p.tags.includes(color.falColor))
+        .filter(
+          (p) =>
+            p.tags.includes(style?.falStyle || "") ||
+            p.tags.includes(color.falColor),
+        )
         .slice(0, 3),
-    [style, color]
+    [style, color],
   );
 
   useEffect(() => {
@@ -85,7 +114,8 @@ export default function HairMirrorApp() {
 
   useEffect(() => {
     const i = setInterval(() => {
-      const ms = Number(process.env.NEXT_PUBLIC_IDLE_RESET_SECONDS || 90) * 1000;
+      const ms =
+        Number(process.env.NEXT_PUBLIC_IDLE_RESET_SECONDS || 90) * 1000;
       if (screen !== "attract" && Date.now() - last.current > ms) reset();
     }, 5000);
     return () => clearInterval(i);
@@ -97,7 +127,7 @@ export default function HairMirrorApp() {
       front: "Face the camera directly.",
       left: "Turn your head and shoulders to show your left side.",
       right: "Turn your head and shoulders to show your right side.",
-      back: "Turn around and show the back of your head."
+      back: "Turn around and show the back of your head.",
     };
     speak(`${VIEW_LABEL[currentCapture]} view. ${instruction[currentCapture]}`);
   }, [screen, currentCapture]);
@@ -135,10 +165,22 @@ export default function HairMirrorApp() {
     act();
     const expected = currentCapture;
     const detected = orientation.orientation as HairView;
+    const yaw = orientation.yaw ?? 0;
 
-    if (orientation.available && detected !== expected) {
-      setError(`Please hold the ${VIEW_LABEL[expected]} position. Current detection: ${VIEW_LABEL[detected]}.`);
-      speak(`Please hold the ${VIEW_LABEL[expected]} position.`);
+    const matchesExpected =
+      expected === "front"
+        ? Math.abs(yaw) < 0.18
+        : expected === "left"
+          ? yaw < -0.08
+          : expected === "right"
+            ? yaw > 0.08
+            : detected === "back";
+
+    if (orientation.available && !matchesExpected) {
+      setError(
+        `Please turn more toward the ${VIEW_LABEL[expected]} position. Current detection: ${VIEW_LABEL[detected]}.`,
+      );
+      speak(`Please turn more toward the ${VIEW_LABEL[expected]} position.`);
       return;
     }
 
@@ -150,7 +192,9 @@ export default function HairMirrorApp() {
       setCaptureIndex((x) => x + 1);
     } else {
       setScreen("styles");
-      speak("All four views are captured. Now choose the hairstyle you would like to preview.");
+      speak(
+        "All four views are captured. Now choose the hairstyle you would like to preview.",
+      );
     }
   }
 
@@ -159,7 +203,14 @@ export default function HairMirrorApp() {
     const response = await fetch("/api/hair", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ image, style: style.falStyle, stylePrompt: style.stylePrompt, styleId: style.id, color: color.falColor, view })
+      body: JSON.stringify({
+        image,
+        style: style.falStyle,
+        stylePrompt: style.stylePrompt,
+        styleId: style.id,
+        color: color.falColor,
+        view,
+      }),
     });
     const data = await response.json();
     if (!response.ok || !data.ok || !data.resultImage) {
@@ -178,11 +229,15 @@ export default function HairMirrorApp() {
     if (!style) return;
     const missing = CAPTURE_ORDER.filter((v) => !captures[v]);
     if (missing.length) {
-      setError(`Missing capture: ${missing.map((v) => VIEW_LABEL[v]).join(", ")}`);
+      setError(
+        `Missing capture: ${missing.map((v) => VIEW_LABEL[v]).join(", ")}`,
+      );
       return;
     }
 
-    const maxLooks = Number(process.env.NEXT_PUBLIC_MAX_MULTI_VIEW_LOOKS_PER_SESSION || 3);
+    const maxLooks = Number(
+      process.env.NEXT_PUBLIC_MAX_MULTI_VIEW_LOOKS_PER_SESSION || 3,
+    );
     if (lookCount >= maxLooks) {
       setError(`Session limit reached: ${maxLooks} multi-view AI looks.`);
       return;
@@ -210,16 +265,20 @@ export default function HairMirrorApp() {
         body: JSON.stringify({
           resultImages: nextResults,
           styleLabel: style.label,
-          colorLabel: color.label
-        })
+          colorLabel: color.label,
+        }),
       });
       const sessionData = await session.json();
       if (sessionData?.url) {
         setShareUrl(sessionData.url);
-        setQr(await QRCode.toDataURL(sessionData.url, { width: 360, margin: 1 }));
+        setQr(
+          await QRCode.toDataURL(sessionData.url, { width: 360, margin: 1 }),
+        );
       }
       setScreen("result");
-      speak("Your multi angle hairstyle is ready. Turn left, right, front or back and the preview will follow your movement.");
+      speak(
+        "Your multi angle hairstyle is ready. Turn left, right, front or back and the preview will follow your movement.",
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generation failed");
       setScreen("colors");
@@ -239,7 +298,13 @@ export default function HairMirrorApp() {
         ref={videoRef}
         muted
         playsInline
-        style={{ position: "fixed", width: 2, height: 2, opacity: 0.001, pointerEvents: "none" }}
+        style={{
+          position: "fixed",
+          width: 2,
+          height: 2,
+          opacity: 0.001,
+          pointerEvents: "none",
+        }}
       />
 
       {screen === "attract" && (
@@ -247,7 +312,9 @@ export default function HairMirrorApp() {
           className="attract"
           onClick={() => {
             setScreen("welcome");
-            speak(`Welcome to ${salon}. Would you like to discover your new look?`);
+            speak(
+              `Welcome to ${salon}. Would you like to discover your new look?`,
+            );
           }}
         >
           <video
@@ -261,7 +328,9 @@ export default function HairMirrorApp() {
           <div className="attractContent">
             <span className="pill">Lotus AI Beauty Mirror</span>
             <h1 className="hero">Welcome to {salon}</h1>
-            <p className="sub">Walk closer or tap to discover your next hairstyle.</p>
+            <p className="sub">
+              Walk closer or tap to discover your next hairstyle.
+            </p>
             <button className="btn primary">Start</button>
           </div>
         </section>
@@ -272,21 +341,30 @@ export default function HairMirrorApp() {
           <span className="pill">360° Multi-View Hair Preview</span>
           <h1 className="hero">Find Your New Look</h1>
           <p className="sub">
-            We capture front, left, right and back views. After generation, turn naturally and the preview follows your orientation.
+            We capture front, left, right and back views. After generation, turn
+            naturally and the preview follows your orientation.
           </p>
-          <button className="btn primary" onClick={beginCapture}>Start 4-View Capture</button>
+          <button className="btn primary" onClick={beginCapture}>
+            Start 4-View Capture
+          </button>
         </section>
       )}
 
       {screen === "capture" && (
         <section className="screen center">
-          <span className="pill">View {captureIndex + 1} of {CAPTURE_ORDER.length}</span>
+          <span className="pill">
+            View {captureIndex + 1} of {CAPTURE_ORDER.length}
+          </span>
           <h1>{VIEW_LABEL[currentCapture]} Capture</h1>
           <p className="sub">
-            {currentCapture === "front" && "Face the camera directly. Keep your whole head and hair visible."}
-            {currentCapture === "left" && "Turn to show your left profile. Keep your head and shoulders inside the guide."}
-            {currentCapture === "right" && "Turn to show your right profile. Keep your head and shoulders inside the guide."}
-            {currentCapture === "back" && "Turn around fully so the back of your head and hair are visible."}
+            {currentCapture === "front" &&
+              "Face the camera directly. Keep your whole head and hair visible."}
+            {currentCapture === "left" &&
+              "Turn to show your left profile. Keep your head and shoulders inside the guide."}
+            {currentCapture === "right" &&
+              "Turn to show your right profile. Keep your head and shoulders inside the guide."}
+            {currentCapture === "back" &&
+              "Turn around fully so the back of your head and hair are visible."}
           </p>
 
           <div className="camera">
@@ -297,12 +375,17 @@ export default function HairMirrorApp() {
                 ? `Detected: ${VIEW_LABEL[orientation.orientation as HairView]}`
                 : "Orientation tracker loading…"}
             </div>
-            <div className="note">Good, even lighting gives better hair edges and colour.</div>
+            <div className="note">
+              Good, even lighting gives better hair edges and colour.
+            </div>
           </div>
 
           <div className="captureSteps">
             {CAPTURE_ORDER.map((view, index) => (
-              <div key={view} className={`captureStep ${captures[view] ? "done" : ""} ${index === captureIndex ? "active" : ""}`}>
+              <div
+                key={view}
+                className={`captureStep ${captures[view] ? "done" : ""} ${index === captureIndex ? "active" : ""}`}
+              >
                 {captures[view] ? "✓" : index + 1} {VIEW_LABEL[view]}
               </div>
             ))}
@@ -311,10 +394,16 @@ export default function HairMirrorApp() {
           {cameraError && <div className="panel">{cameraError}</div>}
           {error && <div className="panel">{error}</div>}
           <div className="actions">
-            <button className="btn primary" disabled={!ready} onClick={captureCurrentView}>
+            <button
+              className="btn primary"
+              disabled={!ready}
+              onClick={captureCurrentView}
+            >
               Capture {VIEW_LABEL[currentCapture]}
             </button>
-            <button className="btn secondary" onClick={reset}>Cancel</button>
+            <button className="btn secondary" onClick={reset}>
+              Cancel
+            </button>
           </div>
         </section>
       )}
@@ -323,21 +412,30 @@ export default function HairMirrorApp() {
         <section className="screen">
           <div className="top">
             <div className="brand">{salon}</div>
-            <button className="btn secondary" onClick={reset}>Home</button>
+            <button className="btn secondary" onClick={reset}>
+              Home
+            </button>
           </div>
           <h1>Choose an Indian hairstyle</h1>
-          <p className="sub">Browse women, men, children and senior styles. The selected style is applied consistently to all four captured views.</p>
+          <p className="sub">
+            Browse women, men, children and senior styles. The selected style is
+            applied consistently to all four captured views.
+          </p>
           <div className="audienceFilters">
             {[
-              ["all","All"],
-              ["women","Women"],
-              ["men","Men"],
-              ["girls","Girls"],
-              ["boys","Boys"],
-              ["senior_women","Senior Women"],
-              ["senior_men","Senior Men"]
-            ].map(([value,label]) => (
-              <button key={value} className={`btn ${audience === value ? "primary" : "secondary"}`} onClick={() => setAudience(value as HairAudience | "all")}>
+              ["all", "All"],
+              ["women", "Women"],
+              ["men", "Men"],
+              ["girls", "Girls"],
+              ["boys", "Boys"],
+              ["senior_women", "Senior Women"],
+              ["senior_men", "Senior Men"],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                className={`btn ${audience === value ? "primary" : "secondary"}`}
+                onClick={() => setAudience(value as HairAudience | "all")}
+              >
                 {label}
               </button>
             ))}
@@ -362,8 +460,13 @@ export default function HairMirrorApp() {
               >
                 <img src={s.thumbnail} alt={s.label} />
                 <h3>{s.label}</h3>
-                <div className="styleMeta">{s.category}{s.region ? ` • ${s.region}` : ""}</div>
-                <div>Service from ₹{s.servicePrice.toLocaleString("en-IN")}</div>
+                <div className="styleMeta">
+                  {s.category}
+                  {s.region ? ` • ${s.region}` : ""}
+                </div>
+                <div>
+                  Service from ₹{s.servicePrice.toLocaleString("en-IN")}
+                </div>
               </button>
             ))}
           </div>
@@ -377,7 +480,12 @@ export default function HairMirrorApp() {
               <div className="brand">{style.label}</div>
               <div>Choose hair colour</div>
             </div>
-            <button className="btn secondary" onClick={() => setScreen("styles")}>Back</button>
+            <button
+              className="btn secondary"
+              onClick={() => setScreen("styles")}
+            >
+              Back
+            </button>
           </div>
           <div className="grid">
             {hairColors.map((c) => (
@@ -388,15 +496,23 @@ export default function HairMirrorApp() {
                 onClick={() => setColor(c)}
               >
                 <h2>{c.label}</h2>
-                <div>{c.servicePrice ? `₹${c.servicePrice.toLocaleString("en-IN")}` : "Keep natural colour"}</div>
+                <div>
+                  {c.servicePrice
+                    ? `₹${c.servicePrice.toLocaleString("en-IN")}`
+                    : "Keep natural colour"}
+                </div>
                 {color.id === c.id && <span className="pill">Selected</span>}
               </button>
             ))}
           </div>
           {error && <div className="panel">{error}</div>}
           <div className="actions">
-            <button className="btn primary" onClick={generate}>Generate 360° Look</button>
-            <button className="btn secondary" onClick={beginCapture}>Retake Views</button>
+            <button className="btn primary" onClick={generate}>
+              Generate 360° Look
+            </button>
+            <button className="btn secondary" onClick={beginCapture}>
+              Retake Views
+            </button>
           </div>
         </section>
       )}
@@ -405,8 +521,12 @@ export default function HairMirrorApp() {
         <section className="screen center">
           <div className="loading" />
           <h1>Creating your multi-angle hairstyle…</h1>
-          <p className="sub">Generating front, left, right and back views with face preservation.</p>
-          <div className="progress"><div style={{ width: `${progress}%` }} /></div>
+          <p className="sub">
+            Generating front, left, right and back views with face preservation.
+          </p>
+          <div className="progress">
+            <div style={{ width: `${progress}%` }} />
+          </div>
           <strong>{progress}%</strong>
         </section>
       )}
@@ -418,16 +538,25 @@ export default function HairMirrorApp() {
               <div className="brand">{salon}</div>
               <div className="orientationText">
                 Live view: <strong>{VIEW_LABEL[liveView]}</strong>
-                {orientation.available ? " • movement tracking active" : " • use angle buttons"}
+                {orientation.available
+                  ? " • movement tracking active"
+                  : " • use angle buttons"}
               </div>
             </div>
-            <button className="btn secondary" onClick={reset}>Home</button>
+            <button className="btn secondary" onClick={reset}>
+              Home
+            </button>
           </div>
 
           <div className="result">
             <div className="panel liveMirrorPanel">
               <div className="liveResultFrame">
-                <img key={liveView} className="main angleResult" src={shownResult} alt={`${VIEW_LABEL[liveView]} AI hairstyle result`} />
+                <img
+                  key={liveView}
+                  className="main angleResult"
+                  src={shownResult}
+                  alt={`${VIEW_LABEL[liveView]} AI hairstyle result`}
+                />
                 <div className="liveViewPill">{VIEW_LABEL[liveView]}</div>
               </div>
 
@@ -444,7 +573,9 @@ export default function HairMirrorApp() {
               </div>
 
               <div className="trackingHelp">
-                Turn your head/body naturally. The camera tracks your orientation locally and switches to the matching AI-generated view.
+                Turn your head/body naturally. The camera tracks your
+                orientation locally and switches to the matching AI-generated
+                view.
               </div>
             </div>
 
@@ -452,13 +583,22 @@ export default function HairMirrorApp() {
               <span className="pill">Identity / Face Lock</span>
               <h1>{style.label}</h1>
               <p>{color.label}</p>
-              <div className="row"><span>{style.serviceName}</span><b>₹{style.servicePrice.toLocaleString("en-IN")}</b></div>
+              <div className="row">
+                <span>{style.serviceName}</span>
+                <b>₹{style.servicePrice.toLocaleString("en-IN")}</b>
+              </div>
               {color.servicePrice > 0 && (
-                <div className="row"><span>{color.serviceName}</span><b>₹{color.servicePrice.toLocaleString("en-IN")}</b></div>
+                <div className="row">
+                  <span>{color.serviceName}</span>
+                  <b>₹{color.servicePrice.toLocaleString("en-IN")}</b>
+                </div>
               )}
               <h3>Recommended products</h3>
               {recommended.map((p) => (
-                <div className="row" key={p.id}><span>{p.name}</span><b>₹{p.price}</b></div>
+                <div className="row" key={p.id}>
+                  <span>{p.name}</span>
+                  <b>₹{p.price}</b>
+                </div>
               ))}
               {qr && (
                 <>
@@ -467,10 +607,27 @@ export default function HairMirrorApp() {
                 </>
               )}
               <div className="actions" style={{ marginTop: 18 }}>
-                <button className="btn primary" onClick={() => setScreen("checkout")}>Book This Look</button>
-                <button className="btn secondary" onClick={() => setScreen("styles")}>Try Another Style</button>
-                <button className="btn secondary" onClick={() => setScreen("colors")}>Change Colour</button>
-                <button className="btn secondary" onClick={beginCapture}>Retake 4 Views</button>
+                <button
+                  className="btn primary"
+                  onClick={() => setScreen("checkout")}
+                >
+                  Book This Look
+                </button>
+                <button
+                  className="btn secondary"
+                  onClick={() => setScreen("styles")}
+                >
+                  Try Another Style
+                </button>
+                <button
+                  className="btn secondary"
+                  onClick={() => setScreen("colors")}
+                >
+                  Change Colour
+                </button>
+                <button className="btn secondary" onClick={beginCapture}>
+                  Retake 4 Views
+                </button>
               </div>
             </aside>
           </div>
@@ -494,13 +651,16 @@ export default function HairMirrorApp() {
 function Checkout({ style, color, products, shareUrl, onBack, onDone }: any) {
   const [ids, setIds] = useState<string[]>([]);
   const chosen = products.filter((p: any) => ids.includes(p.id));
-  const total = style.servicePrice + color.servicePrice + chosen.reduce((a: number, p: any) => a + p.price, 0);
+  const total =
+    style.servicePrice +
+    color.servicePrice +
+    chosen.reduce((a: number, p: any) => a + p.price, 0);
 
   async function pay() {
     const r = await fetch("/api/payment/order", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ amount: total, receipt: `salon-${Date.now()}` })
+      body: JSON.stringify({ amount: total, receipt: `salon-${Date.now()}` }),
     });
     const d = await r.json();
     if (!r.ok || !d.ok) {
@@ -517,19 +677,34 @@ function Checkout({ style, color, products, shareUrl, onBack, onDone }: any) {
       description: `${style.label} + ${color.label}`,
       order_id: d.order.id,
       handler: () => {
-        alert("Payment successful. Add server-side signature verification before production.");
+        alert(
+          "Payment successful. Add server-side signature verification before production.",
+        );
         onDone();
-      }
+      },
     }).open();
   }
 
   return (
     <section className="screen">
-      <div className="top"><h1>Book This Look</h1><button className="btn secondary" onClick={onBack}>Back</button></div>
+      <div className="top">
+        <h1>Book This Look</h1>
+        <button className="btn secondary" onClick={onBack}>
+          Back
+        </button>
+      </div>
       <div className="result">
         <div className="panel">
-          <div className="row"><span>{style.serviceName}</span><b>₹{style.servicePrice}</b></div>
-          {color.servicePrice > 0 && <div className="row"><span>{color.serviceName}</span><b>₹{color.servicePrice}</b></div>}
+          <div className="row">
+            <span>{style.serviceName}</span>
+            <b>₹{style.servicePrice}</b>
+          </div>
+          {color.servicePrice > 0 && (
+            <div className="row">
+              <span>{color.serviceName}</span>
+              <b>₹{color.servicePrice}</b>
+            </div>
+          )}
           <h3>Add products</h3>
           {products.map((p: any) => (
             <label className="row" key={p.id}>
@@ -537,8 +712,15 @@ function Checkout({ style, color, products, shareUrl, onBack, onDone }: any) {
                 <input
                   type="checkbox"
                   checked={ids.includes(p.id)}
-                  onChange={(e) => setIds((x: string[]) => e.target.checked ? [...x, p.id] : x.filter((i) => i !== p.id))}
-                /> {p.name}
+                  onChange={(e) =>
+                    setIds((x: string[]) =>
+                      e.target.checked
+                        ? [...x, p.id]
+                        : x.filter((i) => i !== p.id),
+                    )
+                  }
+                />{" "}
+                {p.name}
               </span>
               <b>₹{p.price}</b>
             </label>
@@ -546,11 +728,26 @@ function Checkout({ style, color, products, shareUrl, onBack, onDone }: any) {
         </div>
         <aside className="panel">
           <h2>Total</h2>
-          <div className="hero" style={{ fontSize: 48 }}>₹{total.toLocaleString("en-IN")}</div>
-          {shareUrl && <p className="sub" style={{ fontSize: 15 }}>Your saved look is available through the QR link.</p>}
+          <div className="hero" style={{ fontSize: 48 }}>
+            ₹{total.toLocaleString("en-IN")}
+          </div>
+          {shareUrl && (
+            <p className="sub" style={{ fontSize: 15 }}>
+              Your saved look is available through the QR link.
+            </p>
+          )}
           <div className="actions">
-            <button className="btn primary" onClick={pay}>Pay Online</button>
-            <button className="btn secondary" onClick={() => alert("Please show this screen at the salon billing counter.")}>Pay at Counter</button>
+            <button className="btn primary" onClick={pay}>
+              Pay Online
+            </button>
+            <button
+              className="btn secondary"
+              onClick={() =>
+                alert("Please show this screen at the salon billing counter.")
+              }
+            >
+              Pay at Counter
+            </button>
           </div>
         </aside>
       </div>
