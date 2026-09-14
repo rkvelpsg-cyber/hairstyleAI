@@ -189,7 +189,7 @@ export default function HairMirrorApp() {
       }),
     });
     const data = await response.json();
-    if (!response.ok || !data.ok || !data.resultImage) {
+    if (!response.ok || !data.success || !data.resultImage) {
       throw new Error(data.error || `${VIEW_LABEL[view]} generation failed`);
     }
 
