@@ -26,6 +26,14 @@ const STRUCTURED_STYLES = new Set([
   "side_part",
   "middle_part",
 ]);
+const STRUCTURED_COLORS = new Set([
+  "natural",
+  "black",
+  "dark_brown",
+  "light_brown",
+  "silver",
+  "gray",
+]);
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
@@ -95,7 +103,12 @@ export async function POST(req: Request) {
     fal.config({ credentials: falKey });
     const useStructured =
       generationMode !== "custom" &&
-      Boolean(providerStyle && STRUCTURED_STYLES.has(providerStyle));
+      Boolean(
+        providerStyle &&
+        color &&
+        STRUCTURED_STYLES.has(providerStyle) &&
+        STRUCTURED_COLORS.has(color),
+      );
     const model = useStructured ? STRUCTURED_MODEL : CUSTOM_MODEL;
     const result: any = useStructured
       ? await fal.subscribe(model, {

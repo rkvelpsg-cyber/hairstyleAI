@@ -838,6 +838,7 @@ export const hairColors: HairColor[] = [
     id: "natural",
     label: "Keep Natural",
     falColor: "natural",
+    providerColor: "natural",
     serviceName: "Natural Hair",
     servicePrice: 0,
   },
