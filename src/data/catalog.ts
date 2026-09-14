@@ -558,7 +558,7 @@ const seeds: Seed[] = [
     category: "everyday",
   },
   {
-    id: "men-buzz",
+    id: "men-buzz-cut",
     label: "Buzz Cut",
     falStyle: "buzz_cut",
     stylePrompt:
@@ -911,7 +911,7 @@ export const hairColors: HairColor[] = [
     servicePrice: 4200,
   },
   {
-    id: "grey",
+    id: "silver",
     label: "Natural Grey / Silver",
     falColor: "gray",
     serviceName: "Grey / Silver Tone",

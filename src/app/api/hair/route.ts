@@ -63,7 +63,12 @@ export async function POST(req: Request) {
 
     fal.config({ credentials: falKey });
 
-    const prompt = buildHairPrompt({ styleLabel: style, stylePrompt, color });
+    const prompt = buildHairPrompt({
+      styleId,
+      styleLabel: style,
+      stylePrompt,
+      color,
+    });
 
     const result: any = await fal.subscribe(model, {
       input: {
@@ -90,6 +95,7 @@ export async function POST(req: Request) {
       success: true,
       resultImage: url,
       provider: "fal-hair-change",
+      endpoint: model,
       requestId: result?.requestId,
       styleId,
     });

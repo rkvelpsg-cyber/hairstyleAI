@@ -48,6 +48,10 @@ export default function HairMirrorApp() {
   const [color, setColor] = useState<HairColor>(hairColors[0]);
   const [results, setResults] = useState<HairViewImages>({});
   const [rawResults, setRawResults] = useState<HairViewImages>({});
+  const [generationDebug, setGenerationDebug] = useState<{
+    provider?: string;
+    endpoint?: string;
+  }>({});
   const [maskDebug, setMaskDebug] = useState<{
     hardMask?: string;
     softMask?: string;
@@ -146,6 +150,7 @@ export default function HairMirrorApp() {
     setColor(hairColors[0]);
     setResults({});
     setRawResults({});
+    setGenerationDebug({});
     setMaskDebug({});
     setShowDebug(false);
     setManualView("front");
@@ -216,6 +221,8 @@ export default function HairMirrorApp() {
       final: locked.image,
       raw: data.resultImage as string,
       debug: locked.debug,
+      provider: data.provider as string | undefined,
+      endpoint: data.endpoint as string | undefined,
     };
   }
 
@@ -249,18 +256,24 @@ export default function HairMirrorApp() {
         softMask?: string;
         hairEditMask?: string;
       } = {};
+      let nextGenerationDebug: { provider?: string; endpoint?: string } = {};
       for (let i = 0; i < CAPTURE_ORDER.length; i++) {
         const view = CAPTURE_ORDER[i];
         const generated = await generateOne(view, captures[view]!);
         nextResults[view] = generated.final;
         nextRawResults[view] = generated.raw;
         nextMaskDebug = generated.debug || nextMaskDebug;
+        nextGenerationDebug = {
+          provider: generated.provider,
+          endpoint: generated.endpoint,
+        };
         setProgress(Math.round(((i + 1) / CAPTURE_ORDER.length) * 100));
       }
 
       setResults(nextResults);
       setRawResults(nextRawResults);
       setMaskDebug(nextMaskDebug);
+      setGenerationDebug(nextGenerationDebug);
       setManualView("front");
       setLookCount((x) => x + 1);
 
@@ -562,6 +575,17 @@ export default function HairMirrorApp() {
                   </button>
                   {showDebug && (
                     <div className="grid" style={{ marginTop: 16 }}>
+                      <div className="panel">
+                        <strong>GENERATION DEBUG</strong>
+                        <div>Selected style ID: {style.id}</div>
+                        <div>Selected color ID: {color.id}</div>
+                        <div>
+                          Provider: {generationDebug.provider || "unknown"}
+                        </div>
+                        <div>
+                          Endpoint: {generationDebug.endpoint || "unknown"}
+                        </div>
+                      </div>
                       <div className="panel">
                         <strong>ORIGINAL</strong>
                         <img
