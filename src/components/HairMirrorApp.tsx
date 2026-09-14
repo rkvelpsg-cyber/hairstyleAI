@@ -3,11 +3,6 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
 import { hairColors, hairStyles, retailProducts } from "@/data/catalog";
 import { useCamera } from "@/hooks/useCamera";
-import { usePresenceDetector } from "@/hooks/usePresenceDetector";
-import {
-  useHeadOrientation,
-  type HeadOrientation,
-} from "@/hooks/useHeadOrientation";
 import { captureFrame } from "@/lib/image";
 import { lockFaceOnly, validateFrontCapture } from "@/lib/faceLock";
 import { speak } from "@/lib/speech";
@@ -68,21 +63,18 @@ export default function HairMirrorApp() {
   const [error, setError] = useState<string | null>(null);
   const last = useRef(Date.now());
 
-  const { videoRef, streamRef, ready, error: cameraError, start } = useCamera();
-  const present = usePresenceDetector(
-    videoRef.current,
-    screen === "attract" && ready,
-  );
-  const trackingEnabled = ready && screen === "capture";
-  const orientation = useHeadOrientation(videoRef, trackingEnabled);
+  const {
+    videoRef,
+    ready,
+    state: cameraState,
+    error: cameraError,
+    start,
+    stop,
+  } = useCamera();
 
   const currentCapture =
     CAPTURE_ORDER[Math.min(captureIndex, CAPTURE_ORDER.length - 1)];
-  const liveView = (
-    orientation.available ? orientation.orientation : manualView
-  ) as HairView;
-  const shownResult =
-    results[liveView] || results.front || Object.values(results)[0] || null;
+  const shownResult = results.front || Object.values(results)[0] || null;
 
   const filteredStyles = useMemo(() => {
     const q = styleSearch.trim().toLowerCase();
@@ -114,15 +106,10 @@ export default function HairMirrorApp() {
   );
 
   useEffect(() => {
-    start();
-  }, [start]);
-
-  useEffect(() => {
-    if (screen === "attract" && present) {
-      setScreen("welcome");
-      speak(`Welcome to ${salon}. Would you like to discover your new look?`);
-    }
-  }, [present, screen, salon]);
+    if (screen !== "capture") return;
+    void start();
+    return stop;
+  }, [screen, start, stop]);
 
   useEffect(() => {
     const i = setInterval(() => {
@@ -174,13 +161,17 @@ export default function HairMirrorApp() {
     if (!videoRef.current) return;
     act();
     const expected = currentCapture;
-    if (!videoRef.current.videoWidth || !videoRef.current.videoHeight) {
+    if (
+      videoRef.current.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+      !videoRef.current.videoWidth ||
+      !videoRef.current.videoHeight
+    ) {
       setError("Camera is still starting. Please wait a moment and try again.");
       return;
     }
     const image = captureFrame(videoRef.current);
     const quality = await validateFrontCapture(image);
-    if (!quality.valid) {
+    if (!quality.valid && quality.available !== false) {
       setError(
         quality.message || "Please improve the capture quality and try again.",
       );
@@ -189,8 +180,13 @@ export default function HairMirrorApp() {
       );
       return;
     }
+    if (quality.available === false) {
+      setError(
+        "Face guide is unavailable. Make sure your full head and hair are visible.",
+      );
+    }
     setCaptures((prev) => ({ ...prev, [expected]: image }));
-    setError(null);
+    if (quality.available !== false) setError(null);
 
     setScreen("styles");
     speak(
@@ -321,28 +317,8 @@ export default function HairMirrorApp() {
     }
   }
 
-  const cloneVideo = (el: HTMLVideoElement | null) => {
-    if (el && streamRef.current) {
-      el.srcObject = streamRef.current;
-      el.play().catch(() => {});
-    }
-  };
-
   return (
     <main className="app" onPointerDown={act}>
-      <video
-        ref={videoRef}
-        muted
-        playsInline
-        style={{
-          position: "fixed",
-          width: 2,
-          height: 2,
-          opacity: 0.001,
-          pointerEvents: "none",
-        }}
-      />
-
       {screen === "attract" && (
         <section
           className="attract"
@@ -397,12 +373,13 @@ export default function HairMirrorApp() {
           </p>
 
           <div className="camera">
-            <video ref={cloneVideo} muted playsInline />
+            <video ref={videoRef} muted playsInline />
             <div className="guide" />
             <div className="orientationBadge">
-              {orientation.available
-                ? `Detected: ${VIEW_LABEL[orientation.orientation as HairView]}`
-                : "Orientation tracker loading…"}
+              {cameraState === "requesting_permission" && "Allow camera access"}
+              {cameraState === "starting_camera" && "Starting camera..."}
+              {cameraState === "camera_ready" && "Camera ready"}
+              {cameraState === "camera_error" && "Camera unavailable"}
             </div>
             <div className="note">
               Good, even lighting gives better hair edges and colour.
@@ -430,6 +407,11 @@ export default function HairMirrorApp() {
             >
               Capture {VIEW_LABEL[currentCapture]}
             </button>
+            {cameraState === "camera_error" && (
+              <button className="btn secondary" onClick={() => void start()}>
+                Retry Camera
+              </button>
+            )}
             <button className="btn secondary" onClick={reset}>
               Cancel
             </button>

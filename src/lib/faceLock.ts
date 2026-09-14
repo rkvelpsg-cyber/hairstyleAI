@@ -166,8 +166,12 @@ export async function validateFrontCapture(source: string) {
       };
     return { valid: true };
   } catch (error) {
+    if (process.env.NODE_ENV !== "production") {
+      console.info("[face guide] MediaPipe validation unavailable");
+    }
     return {
-      valid: false,
+      valid: true,
+      available: false,
       message:
         error instanceof Error
           ? error.message
