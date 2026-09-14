@@ -29,7 +29,7 @@ type Screen =
   | "result"
   | "checkout";
 
-const CAPTURE_ORDER: HairView[] = ["front", "left", "right", "back"];
+const CAPTURE_ORDER: HairView[] = ["front"];
 const VIEW_LABEL: Record<HairView, string> = {
   front: "Front",
   left: "Left Side",
@@ -60,8 +60,7 @@ export default function HairMirrorApp() {
     videoRef.current,
     screen === "attract" && ready,
   );
-  const trackingEnabled =
-    ready && (screen === "capture" || screen === "result");
+  const trackingEnabled = ready && screen === "capture";
   const orientation = useHeadOrientation(videoRef, trackingEnabled);
 
   const currentCapture =
@@ -123,13 +122,7 @@ export default function HairMirrorApp() {
 
   useEffect(() => {
     if (screen !== "capture") return;
-    const instruction: Record<HairView, string> = {
-      front: "Face the camera directly.",
-      left: "Turn your head and shoulders to show your left side.",
-      right: "Turn your head and shoulders to show your right side.",
-      back: "Turn around and show the back of your head.",
-    };
-    speak(`${VIEW_LABEL[currentCapture]} view. ${instruction[currentCapture]}`);
+    speak("Front view. Face the camera directly.");
   }, [screen, currentCapture]);
 
   function act() {
@@ -164,23 +157,10 @@ export default function HairMirrorApp() {
     if (!videoRef.current) return;
     act();
     const expected = currentCapture;
-    const detected = orientation.orientation as HairView;
     const yaw = orientation.yaw ?? 0;
-
-    const matchesExpected =
-      expected === "front"
-        ? Math.abs(yaw) < 0.18
-        : expected === "left"
-          ? yaw < -0.08
-          : expected === "right"
-            ? yaw > 0.08
-            : detected === "back";
-
-    if (orientation.available && !matchesExpected) {
-      setError(
-        `Please turn more toward the ${VIEW_LABEL[expected]} position. Current detection: ${VIEW_LABEL[detected]}.`,
-      );
-      speak(`Please turn more toward the ${VIEW_LABEL[expected]} position.`);
+    if (orientation.available && Math.abs(yaw) >= 0.18) {
+      setError("Please face the camera directly for the front photo.");
+      speak("Please face the camera directly for the front photo.");
       return;
     }
 
@@ -188,14 +168,10 @@ export default function HairMirrorApp() {
     setCaptures((prev) => ({ ...prev, [expected]: image }));
     setError(null);
 
-    if (captureIndex < CAPTURE_ORDER.length - 1) {
-      setCaptureIndex((x) => x + 1);
-    } else {
-      setScreen("styles");
-      speak(
-        "All four views are captured. Now choose the hairstyle you would like to preview.",
-      );
-    }
+    setScreen("styles");
+    speak(
+      "Your front photo is captured. Now choose the hairstyle you would like to preview.",
+    );
   }
 
   async function generateOne(view: HairView, image: string) {
@@ -239,7 +215,7 @@ export default function HairMirrorApp() {
       process.env.NEXT_PUBLIC_MAX_MULTI_VIEW_LOOKS_PER_SESSION || 3,
     );
     if (lookCount >= maxLooks) {
-      setError(`Session limit reached: ${maxLooks} multi-view AI looks.`);
+      setError(`Session limit reached: ${maxLooks} AI looks.`);
       return;
     }
 
@@ -276,9 +252,7 @@ export default function HairMirrorApp() {
         );
       }
       setScreen("result");
-      speak(
-        "Your multi angle hairstyle is ready. Turn left, right, front or back and the preview will follow your movement.",
-      );
+      speak("Your hairstyle preview is ready.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generation failed");
       setScreen("colors");
@@ -338,14 +312,13 @@ export default function HairMirrorApp() {
 
       {screen === "welcome" && (
         <section className="screen center">
-          <span className="pill">360° Multi-View Hair Preview</span>
+          <span className="pill">AI Hair Preview</span>
           <h1 className="hero">Find Your New Look</h1>
           <p className="sub">
-            We capture front, left, right and back views. After generation, turn
-            naturally and the preview follows your orientation.
+            Take one clear front photo, then preview a new hairstyle and colour.
           </p>
           <button className="btn primary" onClick={beginCapture}>
-            Start 4-View Capture
+            Start Front Capture
           </button>
         </section>
       )}
@@ -359,12 +332,6 @@ export default function HairMirrorApp() {
           <p className="sub">
             {currentCapture === "front" &&
               "Face the camera directly. Keep your whole head and hair visible."}
-            {currentCapture === "left" &&
-              "Turn to show your left profile. Keep your head and shoulders inside the guide."}
-            {currentCapture === "right" &&
-              "Turn to show your right profile. Keep your head and shoulders inside the guide."}
-            {currentCapture === "back" &&
-              "Turn around fully so the back of your head and hair are visible."}
           </p>
 
           <div className="camera">
@@ -419,7 +386,7 @@ export default function HairMirrorApp() {
           <h1>Choose an Indian hairstyle</h1>
           <p className="sub">
             Browse women, men, children and senior styles. The selected style is
-            applied consistently to all four captured views.
+            applied to your front-view preview.
           </p>
           <div className="audienceFilters">
             {[
@@ -508,10 +475,10 @@ export default function HairMirrorApp() {
           {error && <div className="panel">{error}</div>}
           <div className="actions">
             <button className="btn primary" onClick={generate}>
-              Generate 360° Look
+              Generate Preview
             </button>
             <button className="btn secondary" onClick={beginCapture}>
-              Retake Views
+              Retake Photo
             </button>
           </div>
         </section>
@@ -520,9 +487,9 @@ export default function HairMirrorApp() {
       {screen === "generating" && (
         <section className="screen center">
           <div className="loading" />
-          <h1>Creating your multi-angle hairstyle…</h1>
+          <h1>Creating your hairstyle preview…</h1>
           <p className="sub">
-            Generating front, left, right and back views with face preservation.
+            Generating your front-view preview with face preservation.
           </p>
           <div className="progress">
             <div style={{ width: `${progress}%` }} />
@@ -537,10 +504,7 @@ export default function HairMirrorApp() {
             <div>
               <div className="brand">{salon}</div>
               <div className="orientationText">
-                Live view: <strong>{VIEW_LABEL[liveView]}</strong>
-                {orientation.available
-                  ? " • movement tracking active"
-                  : " • use angle buttons"}
+                Front-view hairstyle preview
               </div>
             </div>
             <button className="btn secondary" onClick={reset}>
@@ -552,30 +516,12 @@ export default function HairMirrorApp() {
             <div className="panel liveMirrorPanel">
               <div className="liveResultFrame">
                 <img
-                  key={liveView}
+                  key="front"
                   className="main angleResult"
                   src={shownResult}
-                  alt={`${VIEW_LABEL[liveView]} AI hairstyle result`}
+                  alt="Front-view AI hairstyle result"
                 />
-                <div className="liveViewPill">{VIEW_LABEL[liveView]}</div>
-              </div>
-
-              <div className="angleButtons">
-                {CAPTURE_ORDER.map((view) => (
-                  <button
-                    key={view}
-                    className={`btn ${liveView === view ? "primary" : "secondary"}`}
-                    onClick={() => setManualView(view)}
-                  >
-                    {VIEW_LABEL[view]}
-                  </button>
-                ))}
-              </div>
-
-              <div className="trackingHelp">
-                Turn your head/body naturally. The camera tracks your
-                orientation locally and switches to the matching AI-generated
-                view.
+                <div className="liveViewPill">Front</div>
               </div>
             </div>
 
