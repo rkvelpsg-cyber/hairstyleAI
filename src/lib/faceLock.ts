@@ -128,38 +128,38 @@ export async function validateFrontCapture(source: string) {
     const faceTop = bounds.y / image.naturalHeight;
     const faceBottom = (bounds.y + bounds.height) / image.naturalHeight;
     const { brightness, sharpness } = qualityMetrics(image);
-    if (faceWidth < 0.2)
+    if (faceWidth < 0.16)
       return {
         valid: false,
         message: "Please move closer so your face is clearly visible.",
       };
-    if (faceWidth > 0.58 || faceBottom > 0.84)
+    if (faceWidth > 0.68 || faceBottom > 0.9)
       return {
         valid: false,
         message:
           "Please move back so your full hairstyle and shoulders are visible.",
       };
-    if (faceTop < 0.11)
+    if (faceTop < 0.06)
       return {
         valid: false,
         message: "Please leave more space above your hairstyle.",
       };
-    if (landmarks[234].x < 0.06 || landmarks[454].x > 0.94)
+    if (landmarks[234].x < 0.03 || landmarks[454].x > 0.97)
       return {
         valid: false,
         message: "Please center your head and keep both temples visible.",
       };
-    if (yaw > 0.13 || roll > 0.1)
+    if (yaw > 0.2 || roll > 0.14)
       return {
         valid: false,
         message: "Please keep your head upright and face the camera directly.",
       };
-    if (brightness < 50)
+    if (brightness < 38)
       return {
         valid: false,
         message: "The lighting is too dark. Please add light to your face.",
       };
-    if (sharpness < 11)
+    if (sharpness < 7)
       return {
         valid: false,
         message: "The image is blurry. Hold still and try again.",

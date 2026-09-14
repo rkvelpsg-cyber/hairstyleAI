@@ -167,13 +167,6 @@ export default function HairMirrorApp() {
     if (!videoRef.current) return;
     act();
     const expected = currentCapture;
-    const yaw = orientation.yaw ?? 0;
-    if (orientation.available && Math.abs(yaw) >= 0.18) {
-      setError("Please face the camera directly for the front photo.");
-      speak("Please face the camera directly for the front photo.");
-      return;
-    }
-
     const image = captureFrame(videoRef.current);
     const quality = await validateFrontCapture(image);
     if (!quality.valid) {
