@@ -11,10 +11,17 @@ export type HairStyle = {
   id: string;
   label: string;
   falStyle: string;
+  providerStyle?: string;
   /** Rich description for future Lotus AI Cloud / prompt-capable providers. */
   stylePrompt: string;
   audience: HairAudience;
-  category: "traditional" | "modern" | "bridal" | "everyday" | "school" | "festive";
+  category:
+    | "traditional"
+    | "modern"
+    | "bridal"
+    | "everyday"
+    | "school"
+    | "festive";
   region?: string;
   serviceName: string;
   servicePrice: number;
@@ -25,6 +32,7 @@ export type HairColor = {
   id: string;
   label: string;
   falColor: string;
+  providerColor?: string;
   serviceName: string;
   servicePrice: number;
 };

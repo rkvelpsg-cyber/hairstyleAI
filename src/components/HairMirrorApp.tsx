@@ -51,6 +51,8 @@ export default function HairMirrorApp() {
   const [generationDebug, setGenerationDebug] = useState<{
     provider?: string;
     endpoint?: string;
+    providerStyle?: string;
+    providerColor?: string;
   }>({});
   const [maskDebug, setMaskDebug] = useState<{
     hardMask?: string;
@@ -206,7 +208,12 @@ export default function HairMirrorApp() {
         style: style.falStyle,
         stylePrompt: style.stylePrompt,
         styleId: style.id,
-        color: color.falColor,
+        providerStyle: style.providerStyle || style.falStyle,
+        color: color.providerColor || color.falColor,
+        generationMode:
+          style.id === "men-low-fade" || Boolean(style.region)
+            ? "custom"
+            : "structured",
         view,
       }),
     });
@@ -227,6 +234,8 @@ export default function HairMirrorApp() {
       debug: locked.debug,
       provider: data.provider as string | undefined,
       endpoint: data.endpoint as string | undefined,
+      providerStyle: data.providerStyle as string | undefined,
+      providerColor: data.providerColor as string | undefined,
     };
   }
 
@@ -260,7 +269,12 @@ export default function HairMirrorApp() {
         softMask?: string;
         hairEditMask?: string;
       } = {};
-      let nextGenerationDebug: { provider?: string; endpoint?: string } = {};
+      let nextGenerationDebug: {
+        provider?: string;
+        endpoint?: string;
+        providerStyle?: string;
+        providerColor?: string;
+      } = {};
       for (let i = 0; i < CAPTURE_ORDER.length; i++) {
         const view = CAPTURE_ORDER[i];
         const generated = await generateOne(view, captures[view]!);
@@ -270,6 +284,8 @@ export default function HairMirrorApp() {
         nextGenerationDebug = {
           provider: generated.provider,
           endpoint: generated.endpoint,
+          providerStyle: generated.providerStyle,
+          providerColor: generated.providerColor,
         };
         setProgress(Math.round(((i + 1) / CAPTURE_ORDER.length) * 100));
       }
@@ -588,6 +604,14 @@ export default function HairMirrorApp() {
                         </div>
                         <div>
                           Endpoint: {generationDebug.endpoint || "unknown"}
+                        </div>
+                        <div>
+                          Provider Hairstyle:{" "}
+                          {generationDebug.providerStyle || "custom prompt"}
+                        </div>
+                        <div>
+                          Provider Colour:{" "}
+                          {generationDebug.providerColor || "custom prompt"}
                         </div>
                       </div>
                       <div className="panel">

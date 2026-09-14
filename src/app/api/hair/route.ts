@@ -4,19 +4,50 @@ import { buildHairPrompt } from "@/lib/hairPrompt";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
+const STRUCTURED_MODEL = "fal-ai/image-apps-v2/hair-change";
+const CUSTOM_MODEL = "fal-ai/image-editing/hair-change";
+const STRUCTURED_STYLES = new Set([
+  "short_hair",
+  "medium_long_hair",
+  "long_hair",
+  "curly_hair",
+  "wavy_hair",
+  "high_ponytail",
+  "bun",
+  "bob_cut",
+  "pixie_cut",
+  "braids",
+  "straight_hair",
+  "afro",
+  "dreadlocks",
+  "buzz_cut",
+  "mohawk",
+  "bangs",
+  "side_part",
+  "middle_part",
+]);
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
   const provider = process.env.HAIR_AI_PROVIDER || "mock";
-  const model = "fal-ai/image-editing/hair-change";
   try {
     const body = await req.json();
-    const { image, style, stylePrompt, styleId, color } = body as {
+    const {
+      image,
+      style,
+      stylePrompt,
+      styleId,
+      providerStyle,
+      color,
+      generationMode,
+    } = body as {
       image?: string;
       style?: string;
       stylePrompt?: string;
       styleId?: string;
+      providerStyle?: string;
       color?: string;
+      generationMode?: "structured" | "custom";
     };
 
     if (!image || !style || !color) {
@@ -62,22 +93,33 @@ export async function POST(req: Request) {
     }
 
     fal.config({ credentials: falKey });
-
-    const prompt = buildHairPrompt({
-      styleId,
-      styleLabel: style,
-      stylePrompt,
-      color,
-    });
-
-    const result: any = await fal.subscribe(model, {
-      input: {
-        image_url: image,
-        prompt,
-        aspect_ratio: "3:4",
-      },
-      logs: false,
-    });
+    const useStructured =
+      generationMode !== "custom" &&
+      Boolean(providerStyle && STRUCTURED_STYLES.has(providerStyle));
+    const model = useStructured ? STRUCTURED_MODEL : CUSTOM_MODEL;
+    const result: any = useStructured
+      ? await fal.subscribe(model, {
+          input: {
+            image_url: image,
+            target_hairstyle: providerStyle as any,
+            hair_color: color as any,
+            aspect_ratio: { ratio: "3:4" },
+          },
+          logs: false,
+        })
+      : await fal.subscribe(model, {
+          input: {
+            image_url: image,
+            prompt: buildHairPrompt({
+              styleId,
+              styleLabel: style,
+              stylePrompt,
+              color,
+            }),
+            aspect_ratio: "3:4",
+          },
+          logs: false,
+        });
 
     const url = result?.data?.images?.[0]?.url;
     if (!url) {
@@ -94,15 +136,17 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       resultImage: url,
-      provider: "fal-hair-change",
+      provider: "fal",
       endpoint: model,
       requestId: result?.requestId,
       styleId,
+      providerStyle: useStructured ? providerStyle : undefined,
+      providerColor: useStructured ? color : undefined,
     });
   } catch (error) {
     console.error("Hair generation failed", {
       provider,
-      model,
+      model: "fal-ai/hair-change",
       durationMs: Date.now() - startedAt,
       success: false,
       code: "PROVIDER_ERROR",
