@@ -38,22 +38,9 @@ export function useCamera() {
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
         await videoRef.current.play().catch(() => undefined);
-        if (!videoRef.current.videoWidth || !videoRef.current.videoHeight) {
-          await new Promise<void>((resolve) => {
-            videoRef.current?.addEventListener(
-              "loadedmetadata",
-              () => resolve(),
-              {
-                once: true,
-              },
-            );
-          });
-        }
       }
 
-      setReady(
-        Boolean(videoRef.current?.videoWidth && videoRef.current?.videoHeight),
-      );
+      setReady(true);
       setError(null);
     } catch (e) {
       setReady(false);

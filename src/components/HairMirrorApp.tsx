@@ -172,6 +172,10 @@ export default function HairMirrorApp() {
     if (!videoRef.current) return;
     act();
     const expected = currentCapture;
+    if (!videoRef.current.videoWidth || !videoRef.current.videoHeight) {
+      setError("Camera is still starting. Please wait a moment and try again.");
+      return;
+    }
     const image = captureFrame(videoRef.current);
     const quality = await validateFrontCapture(image);
     if (!quality.valid) {
