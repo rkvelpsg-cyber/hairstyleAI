@@ -6,21 +6,26 @@ async function detector(){
 }
 async function img(src:string){const i=new Image();i.crossOrigin="anonymous";i.src=src;await i.decode();return i;}
 
-// Hair must be allowed to change, so this protects the INNER FACE only.
 export async function lockFaceOnly(originalSrc:string, generatedSrc:string){
   try{
     const [o,g,d]=await Promise.all([img(originalSrc),img(generatedSrc),detector()]);
     const a=d.detect(o).detections[0]?.boundingBox; const b=d.detect(g).detections[0]?.boundingBox;
     if(!a||!b) return {image:generatedSrc,applied:false};
-    const out=document.createElement("canvas"); out.width=g.naturalWidth; out.height=g.naturalHeight; const ctx=out.getContext("2d"); if(!ctx) return {image:generatedSrc,applied:false}; ctx.drawImage(g,0,0);
-    const sx=a.originX+a.width*.10, sy=a.originY+a.height*.14, sw=a.width*.80, sh=a.height*.82;
-    const dx=b.originX+b.width*.10, dy=b.originY+b.height*.14, dw=b.width*.80, dh=b.height*.82;
-    const patch=document.createElement("canvas"); patch.width=Math.max(1,Math.round(dw)); patch.height=Math.max(1,Math.round(dh)); const p=patch.getContext("2d"); if(!p)return {image:generatedSrc,applied:false};
-    p.drawImage(o,sx,sy,sw,sh,0,0,patch.width,patch.height);
-    p.globalCompositeOperation="destination-in";
-    const grad=p.createRadialGradient(patch.width*.5,patch.height*.5,Math.min(patch.width,patch.height)*.30,patch.width*.5,patch.height*.5,Math.max(patch.width,patch.height)*.58);
-    grad.addColorStop(0,"rgba(255,255,255,1)"); grad.addColorStop(.78,"rgba(255,255,255,1)"); grad.addColorStop(1,"rgba(255,255,255,0)"); p.fillStyle=grad; p.fillRect(0,0,patch.width,patch.height); p.globalCompositeOperation="source-over";
-    ctx.drawImage(patch,dx,dy,dw,dh);
+    const out=document.createElement("canvas"); out.width=o.naturalWidth; out.height=o.naturalHeight; const ctx=out.getContext("2d"); if(!ctx) return {image:generatedSrc,applied:false}; ctx.drawImage(o,0,0);
+    const sx=b.originX-b.width*.55, sy=b.originY-b.height*.80, sw=b.width*2.10, sh=b.height*2.25;
+    const dx=a.originX-a.width*.55, dy=a.originY-a.height*.80, dw=a.width*2.10, dh=a.height*2.25;
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(dx+dw*.5,dy+dh*.5,dw*.5,dh*.5,0,0,Math.PI*2);
+    ctx.clip();
+    ctx.drawImage(g,sx,sy,sw,sh,dx,dy,dw,dh);
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(a.originX+a.width*.5,a.originY+a.height*.54,a.width*.44,a.height*.49,0,0,Math.PI*2);
+    ctx.clip();
+    ctx.drawImage(o,0,0);
+    ctx.restore();
     return {image:out.toDataURL("image/jpeg",.94),applied:true};
   }catch(e){console.warn("Face lock failed",e);return {image:generatedSrc,applied:false};}
 }
