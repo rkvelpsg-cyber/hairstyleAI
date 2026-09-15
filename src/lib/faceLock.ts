@@ -7,6 +7,7 @@ type FaceData = {
   landmarks: Landmark[];
   bounds: Bounds;
 };
+export type StylingFaceMetrics = Pick<FaceData, "landmarks" | "bounds">;
 type MaskDebug = { hardMask: string; softMask: string; hairEditMask: string };
 type IdentityQuality = { valid: boolean; score: number };
 
@@ -81,6 +82,13 @@ async function analyseFace(source: string): Promise<FaceData> {
     landmarks,
     bounds: { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y },
   };
+}
+
+export async function analyseFaceForStyling(
+  source: string,
+): Promise<StylingFaceMetrics> {
+  const face = await analyseFace(source);
+  return { landmarks: face.landmarks, bounds: face.bounds };
 }
 
 function qualityMetrics(image: HTMLImageElement) {

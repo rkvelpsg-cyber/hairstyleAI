@@ -53,7 +53,11 @@ FAL_KEY=your_key_here
 ```env
 NEXT_PUBLIC_MIRROR_CAMERA=true
 NEXT_PUBLIC_MAX_MULTI_VIEW_LOOKS_PER_SESSION=3
+NEXT_PUBLIC_CAPTURE_VOICE=true
 ```
+
+`NEXT_PUBLIC_CAPTURE_VOICE=false` disables the optional browser speech for the
+three-second front-camera countdown. Camera capture does not wait for speech.
 
 Each complete multi-view hairstyle currently makes up to **four AI image generations**: front, left, right and back. This gives a more realistic movement experience, but it costs roughly four times as much as a single-image hairstyle preview when using a per-image provider.
 
@@ -82,6 +86,7 @@ This is a practical kiosk heuristic, not full 3D reconstruction.
 - `src/hooks/useHeadOrientation.ts` — live front/left/right/back tracking
 - `src/hooks/useCamera.ts` — webcam management
 - `src/lib/faceLock.ts` — identity-preserving face composite
+- `src/lib/styleAdvisor/` — local MediaPipe-backed salon recommendations
 - `src/app/api/hair/route.ts` — hair AI provider route
 - `src/app/api/session/route.ts` — QR session storage
 - `src/app/api/payment/order/route.ts` — Razorpay order creation

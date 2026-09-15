@@ -6,6 +6,11 @@ import { useCamera } from "@/hooks/useCamera";
 import { captureFrame } from "@/lib/image";
 import { lockFaceOnly, validateFrontCapture } from "@/lib/faceLock";
 import { speak } from "@/lib/speech";
+import { localStyleAdvisor } from "@/lib/styleAdvisor/advisor";
+import type {
+  SalonStyleAdvice,
+  Recommendation,
+} from "@/lib/styleAdvisor/types";
 import type {
   HairAudience,
   HairColor,
@@ -61,6 +66,12 @@ export default function HairMirrorApp() {
   const [lookCount, setLookCount] = useState(0);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState<1 | 2 | 3 | null>(null);
+  const [shutterFlash, setShutterFlash] = useState(false);
+  const [advisor, setAdvisor] = useState<SalonStyleAdvice | null>(null);
+  const [advisorLoading, setAdvisorLoading] = useState(false);
+  const countdownTimerRef = useRef<number | null>(null);
+  const countdownRunRef = useRef(0);
   const last = useRef(Date.now());
 
   const {
@@ -125,11 +136,42 @@ export default function HairMirrorApp() {
     speak("Front view. Face the camera directly.");
   }, [screen, currentCapture]);
 
+  useEffect(() => {
+    if (screen !== "styles" || !captures.front) return;
+    let active = true;
+    setAdvisorLoading(true);
+    void localStyleAdvisor
+      .advise({
+        image: captures.front,
+        audience,
+        styles: hairStyles,
+        colors: hairColors,
+      })
+      .then((advice) => {
+        if (active) setAdvisor(advice);
+      })
+      .catch(() => {
+        if (active) setAdvisor(null);
+      })
+      .finally(() => {
+        if (active) setAdvisorLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [audience, captures.front, screen]);
+
   function act() {
     last.current = Date.now();
   }
 
   function reset() {
+    countdownRunRef.current += 1;
+    if (countdownTimerRef.current !== null) {
+      window.clearTimeout(countdownTimerRef.current);
+      countdownTimerRef.current = null;
+    }
+    setCountdown(null);
     setScreen("attract");
     setCaptureIndex(0);
     setCaptures({});
@@ -148,13 +190,60 @@ export default function HairMirrorApp() {
     setLookCount(0);
     setProgress(0);
     setError(null);
+    setShutterFlash(false);
+    setAdvisor(null);
+    setAdvisorLoading(false);
   }
 
   function beginCapture() {
+    countdownRunRef.current += 1;
     setCaptureIndex(0);
     setCaptures({});
+    setAdvisor(null);
     setError(null);
     setScreen("capture");
+  }
+
+  function waitForCountdown(milliseconds: number, run: number) {
+    return new Promise<boolean>((resolve) => {
+      countdownTimerRef.current = window.setTimeout(() => {
+        countdownTimerRef.current = null;
+        resolve(countdownRunRef.current === run);
+      }, milliseconds);
+    });
+  }
+
+  async function startCountdown() {
+    if (countdown !== null || !ready || !videoRef.current) return;
+    if (
+      videoRef.current.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
+      !videoRef.current.videoWidth ||
+      !videoRef.current.videoHeight
+    ) {
+      setError("Camera is still starting. Please wait a moment and try again.");
+      return;
+    }
+
+    const run = ++countdownRunRef.current;
+    const useVoice = process.env.NEXT_PUBLIC_CAPTURE_VOICE !== "false";
+    const announce = (number: 1 | 2 | 3) => {
+      if (useVoice) speak(["One", "Two", "Three"][number - 1]);
+    };
+    setError(null);
+    setCountdown(1);
+    announce(1);
+    if (!(await waitForCountdown(1000, run))) return;
+    setCountdown(2);
+    announce(2);
+    if (!(await waitForCountdown(1000, run))) return;
+    setCountdown(3);
+    announce(3);
+    await new Promise<void>((resolve) =>
+      window.requestAnimationFrame(() => resolve()),
+    );
+    if (countdownRunRef.current !== run) return;
+    await captureCurrentView();
+    setCountdown(null);
   }
 
   async function captureCurrentView() {
@@ -169,6 +258,8 @@ export default function HairMirrorApp() {
       setError("Camera is still starting. Please wait a moment and try again.");
       return;
     }
+    setShutterFlash(true);
+    window.setTimeout(() => setShutterFlash(false), 180);
     const image = captureFrame(videoRef.current);
     const quality = await validateFrontCapture(image);
     if (!quality.valid && quality.available !== false) {
@@ -378,6 +469,15 @@ export default function HairMirrorApp() {
               {cameraState === "camera_ready" && "Camera ready"}
               {cameraState === "camera_error" && "Camera unavailable"}
             </div>
+            {countdown !== null && (
+              <div className="countdownOverlay" aria-live="assertive">
+                <strong key={countdown}>{countdown}</strong>
+                <span>CAMERA LIVE</span>
+              </div>
+            )}
+            {shutterFlash && (
+              <div className="shutterFlash" aria-hidden="true" />
+            )}
             <div className="note">
               Good, even lighting gives better hair edges and colour.
             </div>
@@ -399,8 +499,8 @@ export default function HairMirrorApp() {
           <div className="actions">
             <button
               className="btn primary"
-              disabled={!ready}
-              onClick={captureCurrentView}
+              disabled={!ready || countdown !== null}
+              onClick={() => void startCountdown()}
             >
               Capture {VIEW_LABEL[currentCapture]}
             </button>
@@ -429,6 +529,80 @@ export default function HairMirrorApp() {
             Browse women, men, children and senior styles. The selected style is
             applied to your front-view preview.
           </p>
+          <section className="advisorPanel panel">
+            <div className="top">
+              <div>
+                <span className="pill">Local recommendations</span>
+                <h2>Your AI Style Advisor</h2>
+              </div>
+              {advisorLoading && (
+                <span className="styleCount">Analysing...</span>
+              )}
+            </div>
+            {advisor ? (
+              <>
+                <div className="advisorProfile">
+                  <div>
+                    <span className="styleMeta">Approximate face shape</span>
+                    <strong>{advisor.faceShape}</strong>
+                  </div>
+                  <div>
+                    <span className="styleMeta">Visible styling notes</span>
+                    <span>{advisor.hairCharacteristics?.join(" • ")}</span>
+                  </div>
+                </div>
+                <p className="advisorExplanation">{advisor.explanation}</p>
+                <AdvisorRecommendations
+                  title="Top hairstyle picks"
+                  recommendations={advisor.recommendedHairstyles}
+                  onTry={(recommendation) => {
+                    const selected = hairStyles.find(
+                      (item) => item.id === recommendation.id,
+                    );
+                    if (!selected) return;
+                    setStyle(selected);
+                    setScreen("colors");
+                    speak(
+                      `${selected.label} selected. Now choose a hair colour.`,
+                    );
+                  }}
+                />
+                <AdvisorRecommendations
+                  title="Hair color ideas"
+                  recommendations={advisor.recommendedHairColors}
+                  onTry={(recommendation) => {
+                    const selected = hairColors.find(
+                      (item) => item.id === recommendation.id,
+                    );
+                    if (selected) setColor(selected);
+                  }}
+                  actionLabel="Try This Color"
+                />
+                {advisor.groomingSuggestions && (
+                  <AdvisorRecommendations
+                    title="Grooming"
+                    recommendations={advisor.groomingSuggestions}
+                  />
+                )}
+                {advisor.makeupSuggestions && (
+                  <AdvisorRecommendations
+                    title="Makeup looks"
+                    recommendations={advisor.makeupSuggestions}
+                  />
+                )}
+                {advisor.lipstickSuggestions && (
+                  <AdvisorRecommendations
+                    title="Lip colors"
+                    recommendations={advisor.lipstickSuggestions}
+                  />
+                )}
+              </>
+            ) : !advisorLoading ? (
+              <p className="advisorExplanation">
+                Choose an audience to receive local salon suggestions.
+              </p>
+            ) : null}
+          </section>
           <div className="audienceFilters">
             {[
               ["all", "All"],
@@ -719,6 +893,49 @@ export default function HairMirrorApp() {
         />
       )}
     </main>
+  );
+}
+
+function AdvisorRecommendations({
+  title,
+  recommendations,
+  onTry,
+  actionLabel = "Try This Style",
+}: {
+  title: string;
+  recommendations: Recommendation[];
+  onTry?: (recommendation: Recommendation) => void;
+  actionLabel?: string;
+}) {
+  return (
+    <div className="advisorRecommendations">
+      <h3>{title}</h3>
+      <div className="advisorList">
+        {recommendations.map((recommendation) => (
+          <div className="advisorRecommendation" key={recommendation.id}>
+            <div>
+              <strong>{recommendation.label}</strong>
+              <span className="advisorPriority">
+                {recommendation.priority === "top_pick"
+                  ? "Top Pick"
+                  : recommendation.priority === "great_match"
+                    ? "Great Match"
+                    : "Worth Trying"}
+              </span>
+              <p>{recommendation.reason}</p>
+            </div>
+            {onTry && (
+              <button
+                className="btn secondary"
+                onClick={() => onTry(recommendation)}
+              >
+                {actionLabel}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
   );
 }
 
