@@ -331,30 +331,6 @@ export function featherComposite(original: FaceData, generated: FaceData) {
   protectedContext.globalCompositeOperation = "destination-in";
   protectedContext.drawImage(softMask, 0, 0);
   context.drawImage(protectedFace, 0, 0);
-  context.save();
-  context.globalCompositeOperation = "source-over";
-  context.beginPath();
-  context.ellipse(
-    original.bounds.x + original.bounds.width / 2,
-    original.bounds.y + original.bounds.height * 0.24,
-    original.bounds.width * 0.78,
-    original.bounds.height * 0.98,
-    0,
-    Math.PI,
-    Math.PI * 2,
-  );
-  context.rect(
-    original.bounds.x - original.bounds.width * 0.62,
-    original.bounds.y - original.bounds.height * 0.78,
-    original.bounds.width * 2.24,
-    (point(original.landmarks[70], original.image).y +
-      point(original.landmarks[300], original.image).y) /
-      2 -
-      (original.bounds.y - original.bounds.height * 0.78),
-  );
-  context.clip();
-  context.drawImage(aligned, 0, 0);
-  context.restore();
   return {
     output,
     debug: {

@@ -26,8 +26,10 @@ export function buildHairPrompt({
       ? `Use a realistic ${color} hair colour.`
       : "Keep the natural hair colour.";
   return [
-    "Modify only scalp hair. Preserve exact customer identity.",
+    "Edit the original photograph in place. Modify only the scalp hair and, when requested, its colour. Preserve the exact customer identity and the original face as real pixels.",
     "Preserve eyes, eyebrows, nose, mouth, skin tone, moustache, beard, eyeglasses and facial geometry.",
+    "Keep the entire face as one continuous natural face: no face mask, face overlay, split face, duplicate face, hard vertical or horizontal boundary, patch, halo, translucent band, or different skin tone on any part of the forehead, cheeks, nose, mouth, jaw, or neck.",
+    "Do not redraw, repaint, retouch, smooth, reshape, relight, beautify, age, de-age, or reconstruct any facial area. Do not add makeup or facial shadows.",
     "Do not beautify the customer. Do not change apparent age. Do not change head pose unnecessarily.",
     `Create this professional salon hairstyle: ${hairstyle}.`,
     isBuzzCut
@@ -39,6 +41,6 @@ export function buildHairPrompt({
     color === "gray" || color === "silver"
       ? "Change only scalp hair colour to realistic natural human silver, not metallic paint. Do not recolour eyebrows, moustache, beard, eyelashes, or any other facial hair."
       : "",
-    "Maintain the original background, shoulders, and camera framing.",
+    "Maintain the original background, shoulders, clothing, lighting, camera framing, perspective, and image texture. Blend new hair naturally into the existing hairline with realistic strands and shadows.",
   ].join(" ");
 }

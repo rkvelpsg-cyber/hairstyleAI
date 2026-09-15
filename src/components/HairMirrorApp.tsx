@@ -206,10 +206,7 @@ export default function HairMirrorApp() {
         styleId: style.id,
         providerStyle: style.providerStyle || style.falStyle,
         color: color.providerColor || color.falColor,
-        generationMode:
-          style.id === "men-low-fade" || Boolean(style.region)
-            ? "custom"
-            : "structured",
+        generationMode: "custom",
         view,
       }),
     });
