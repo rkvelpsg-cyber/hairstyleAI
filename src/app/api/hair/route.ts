@@ -1,79 +1,58 @@
 import { NextResponse } from "next/server";
 import { fal } from "@fal-ai/client";
+import { hairColors, hairStyles } from "@/data/catalog";
 import { buildHairPrompt } from "@/lib/hairPrompt";
+import { resolveColorProvider, resolveStyleProvider } from "@/lib/styleConfig";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
 const STRUCTURED_MODEL = "fal-ai/image-apps-v2/hair-change";
 const CUSTOM_MODEL = "fal-ai/image-editing/hair-change";
-const STRUCTURED_STYLES = new Set([
-  "short_hair",
-  "medium_long_hair",
-  "long_hair",
-  "curly_hair",
-  "wavy_hair",
-  "high_ponytail",
-  "bun",
-  "bob_cut",
-  "pixie_cut",
-  "braids",
-  "straight_hair",
-  "afro",
-  "dreadlocks",
-  "buzz_cut",
-  "mohawk",
-  "bangs",
-  "side_part",
-  "middle_part",
-]);
-const STRUCTURED_COLORS = new Set([
-  "natural",
-  "black",
-  "dark_brown",
-  "light_brown",
-  "silver",
-  "gray",
-]);
 
 export async function POST(req: Request) {
   const startedAt = Date.now();
   const provider = process.env.HAIR_AI_PROVIDER || "mock";
   try {
     const body = await req.json();
-    const {
-      image,
-      style,
-      stylePrompt,
-      styleId,
-      providerStyle,
-      color,
-      generationMode,
-    } = body as {
+    const { image, style, stylePrompt, styleId, colorId } = body as {
       image?: string;
       style?: string;
       stylePrompt?: string;
       styleId?: string;
-      providerStyle?: string;
-      color?: string;
-      generationMode?: "structured" | "custom";
+      colorId?: string;
     };
 
-    if (!image || !style || !color) {
+    const selectedStyle = hairStyles.find((item) => item.id === styleId);
+    const selectedColor = hairColors.find((item) => item.id === colorId);
+    if (!image || !styleId || !selectedStyle || !selectedColor) {
       return NextResponse.json(
         {
           success: false,
-          error: "Missing image/style/color",
+          error: "Invalid image, hairstyle, or hair color selection",
           code: "INVALID_INPUT",
         },
         { status: 400 },
       );
     }
 
+    const styleConfig = resolveStyleProvider(selectedStyle);
+    const providerColor = resolveColorProvider(selectedColor);
+    const mapping = {
+      selectedStyle: selectedStyle.label,
+      selectedStyleId: selectedStyle.id,
+      provider: provider === "fal" ? "fal" : provider,
+      providerMode: styleConfig.mode,
+      endpoint: styleConfig.endpoint,
+      providerTarget: styleConfig.targetHairstyle,
+      selectedColor: selectedColor.label,
+      providerColor,
+    };
+
     if (provider === "mock") {
       return NextResponse.json({
         success: true,
         resultImage: image,
-        provider: "mock",
+        ...mapping,
       });
     }
 
@@ -101,21 +80,14 @@ export async function POST(req: Request) {
     }
 
     fal.config({ credentials: falKey });
-    const useStructured =
-      generationMode !== "custom" &&
-      Boolean(
-        providerStyle &&
-        color &&
-        STRUCTURED_STYLES.has(providerStyle) &&
-        STRUCTURED_COLORS.has(color),
-      );
+    const useStructured = styleConfig.mode === "structured";
     const model = useStructured ? STRUCTURED_MODEL : CUSTOM_MODEL;
     const result: any = useStructured
       ? await fal.subscribe(model, {
           input: {
             image_url: image,
-            target_hairstyle: providerStyle as any,
-            hair_color: color as any,
+            target_hairstyle: styleConfig.targetHairstyle as any,
+            hair_color: providerColor as any,
             aspect_ratio: { ratio: "3:4" },
           },
           logs: false,
@@ -124,10 +96,10 @@ export async function POST(req: Request) {
           input: {
             image_url: image,
             prompt: buildHairPrompt({
-              styleId,
-              styleLabel: style,
-              stylePrompt,
-              color,
+              styleId: selectedStyle.id,
+              styleLabel: selectedStyle.label,
+              stylePrompt: selectedStyle.stylePrompt || stylePrompt,
+              color: providerColor,
             }),
             aspect_ratio: "3:4",
           },
@@ -149,12 +121,9 @@ export async function POST(req: Request) {
     return NextResponse.json({
       success: true,
       resultImage: url,
-      provider: "fal",
-      endpoint: model,
       requestId: result?.requestId,
       styleId,
-      providerStyle: useStructured ? providerStyle : undefined,
-      providerColor: useStructured ? color : undefined,
+      ...mapping,
     });
   } catch (error) {
     console.error("Hair generation failed", {

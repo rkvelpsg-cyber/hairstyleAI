@@ -825,7 +825,6 @@ const seeds: Seed[] = [
 
 export const hairStyles: HairStyle[] = seeds.map((s) => ({
   ...s,
-  providerStyle: s.falStyle,
   serviceName: s.label,
   servicePrice:
     s.servicePrice ??

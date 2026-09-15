@@ -11,7 +11,6 @@ export type HairStyle = {
   id: string;
   label: string;
   falStyle: string;
-  providerStyle?: string;
   /** Rich description for future Lotus AI Cloud / prompt-capable providers. */
   stylePrompt: string;
   audience: HairAudience;

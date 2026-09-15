@@ -7,6 +7,8 @@ import { captureFrame } from "@/lib/image";
 import { lockFaceOnly, validateFrontCapture } from "@/lib/faceLock";
 import { speak } from "@/lib/speech";
 import { localStyleAdvisor } from "@/lib/styleAdvisor/advisor";
+import { resolveColorProvider, resolveStyleProvider } from "@/lib/styleConfig";
+import { localStyleValidator } from "@/lib/styleValidation";
 import type {
   SalonStyleAdvice,
   Recommendation,
@@ -49,10 +51,16 @@ export default function HairMirrorApp() {
   const [results, setResults] = useState<HairViewImages>({});
   const [rawResults, setRawResults] = useState<HairViewImages>({});
   const [generationDebug, setGenerationDebug] = useState<{
+    selectedStyle?: string;
+    selectedStyleId?: string;
     provider?: string;
+    providerMode?: string;
     endpoint?: string;
-    providerStyle?: string;
+    providerTarget?: string;
+    selectedColor?: string;
     providerColor?: string;
+    validationPassed?: boolean;
+    validationReasons?: string[];
   }>({});
   const [maskDebug, setMaskDebug] = useState<{
     hardMask?: string;
@@ -287,23 +295,47 @@ export default function HairMirrorApp() {
 
   async function generateOne(view: HairView, image: string) {
     if (!style) throw new Error("Choose a hairstyle first");
+    const styleConfig = resolveStyleProvider(style);
+    const providerColor = resolveColorProvider(color);
     const response = await fetch("/api/hair", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         image,
-        style: style.falStyle,
-        stylePrompt: style.stylePrompt,
         styleId: style.id,
-        providerStyle: style.providerStyle || style.falStyle,
-        color: color.providerColor || color.falColor,
-        generationMode: "custom",
+        colorId: color.id,
         view,
       }),
     });
     const data = await response.json();
     if (!response.ok || !data.success || !data.resultImage) {
       throw new Error(data.error || `${VIEW_LABEL[view]} generation failed`);
+    }
+    const validation = await localStyleValidator.validate(
+      image,
+      data.resultImage,
+      style,
+    );
+    const debug = {
+      selectedStyle: data.selectedStyle || style.label,
+      selectedStyleId: data.selectedStyleId || style.id,
+      provider: data.provider,
+      providerMode: data.providerMode || styleConfig.mode,
+      endpoint: data.endpoint || styleConfig.endpoint,
+      providerTarget: data.providerTarget || styleConfig.targetHairstyle,
+      selectedColor: data.selectedColor || color.label,
+      providerColor: data.providerColor || providerColor,
+      validationPassed: validation.passed,
+      validationReasons: validation.reasons,
+    };
+    if (!validation.passed) {
+      return {
+        final: undefined,
+        raw: data.resultImage as string,
+        requestDebug: debug,
+        faceDebug: undefined,
+        validation,
+      };
     }
 
     const locked = await lockFaceOnly(image, data.resultImage);
@@ -315,11 +347,9 @@ export default function HairMirrorApp() {
     return {
       final: locked.image,
       raw: data.resultImage as string,
-      debug: locked.debug,
-      provider: data.provider as string | undefined,
-      endpoint: data.endpoint as string | undefined,
-      providerStyle: data.providerStyle as string | undefined,
-      providerColor: data.providerColor as string | undefined,
+      requestDebug: debug,
+      faceDebug: locked.debug,
+      validation,
     };
   }
 
@@ -354,23 +384,33 @@ export default function HairMirrorApp() {
         hairEditMask?: string;
       } = {};
       let nextGenerationDebug: {
+        selectedStyle?: string;
+        selectedStyleId?: string;
         provider?: string;
+        providerMode?: string;
         endpoint?: string;
-        providerStyle?: string;
+        providerTarget?: string;
+        selectedColor?: string;
         providerColor?: string;
+        validationPassed?: boolean;
+        validationReasons?: string[];
       } = {};
       for (let i = 0; i < CAPTURE_ORDER.length; i++) {
         const view = CAPTURE_ORDER[i];
         const generated = await generateOne(view, captures[view]!);
-        nextResults[view] = generated.final;
         nextRawResults[view] = generated.raw;
-        nextMaskDebug = generated.debug || nextMaskDebug;
-        nextGenerationDebug = {
-          provider: generated.provider,
-          endpoint: generated.endpoint,
-          providerStyle: generated.providerStyle,
-          providerColor: generated.providerColor,
-        };
+        nextGenerationDebug = generated.requestDebug || nextGenerationDebug;
+        if (!generated.validation.passed) {
+          setRawResults(nextRawResults);
+          setGenerationDebug(nextGenerationDebug);
+          setError(
+            `We couldn't create an accurate preview for this style. ${generated.validation.reasons[0] || "Please try again."}`,
+          );
+          setScreen("colors");
+          return;
+        }
+        nextResults[view] = generated.final!;
+        nextMaskDebug = generated.faceDebug || nextMaskDebug;
         setProgress(Math.round(((i + 1) / CAPTURE_ORDER.length) * 100));
       }
 
@@ -688,12 +728,57 @@ export default function HairMirrorApp() {
             ))}
           </div>
           {error && <div className="panel">{error}</div>}
+          {process.env.NODE_ENV !== "production" && rawResults.front && (
+            <div className="panel">
+              <strong>REQUEST / VALIDATION DEBUG</strong>
+              <div>
+                Selected Style: {generationDebug.selectedStyle || style.label}
+              </div>
+              <div>
+                Selected Style ID: {generationDebug.selectedStyleId || style.id}
+              </div>
+              <div>Provider: {generationDebug.provider || "unknown"}</div>
+              <div>
+                Provider Mode: {generationDebug.providerMode || "unknown"}
+              </div>
+              <div>Endpoint: {generationDebug.endpoint || "unknown"}</div>
+              <div>
+                Provider Target:{" "}
+                {generationDebug.providerTarget || "custom prompt"}
+              </div>
+              <div>
+                Selected Color: {generationDebug.selectedColor || color.label}
+              </div>
+              <div>
+                Provider Color: {generationDebug.providerColor || "unknown"}
+              </div>
+              <div>
+                Validation: {generationDebug.validationPassed ? "PASS" : "FAIL"}
+              </div>
+              {generationDebug.validationReasons?.map((reason) => (
+                <div key={reason}>Reason: {reason}</div>
+              ))}
+              <img
+                className="main"
+                src={rawResults.front}
+                alt="Raw AI result"
+              />
+            </div>
+          )}
           <div className="actions">
             <button className="btn primary" onClick={generate}>
-              Generate Preview
+              {rawResults.front && generationDebug.validationPassed === false
+                ? "Try Again"
+                : "Generate Preview"}
             </button>
             <button className="btn secondary" onClick={beginCapture}>
               Retake Photo
+            </button>
+            <button
+              className="btn secondary"
+              onClick={() => setScreen("styles")}
+            >
+              Choose Another Style
             </button>
           </div>
         </section>
@@ -759,13 +844,32 @@ export default function HairMirrorApp() {
                           Endpoint: {generationDebug.endpoint || "unknown"}
                         </div>
                         <div>
-                          Provider Hairstyle:{" "}
-                          {generationDebug.providerStyle || "custom prompt"}
+                          Provider Target:{" "}
+                          {generationDebug.providerTarget || "custom prompt"}
                         </div>
                         <div>
-                          Provider Colour:{" "}
-                          {generationDebug.providerColor || "custom prompt"}
+                          Selected Style:{" "}
+                          {generationDebug.selectedStyle || style.label}
                         </div>
+                        <div>
+                          Selected Style ID:{" "}
+                          {generationDebug.selectedStyleId || style.id}
+                        </div>
+                        <div>
+                          Selected Color:{" "}
+                          {generationDebug.selectedColor || color.label}
+                        </div>
+                        <div>
+                          Provider Color:{" "}
+                          {generationDebug.providerColor || "unknown"}
+                        </div>
+                        <div>
+                          Validation:{" "}
+                          {generationDebug.validationPassed ? "PASS" : "FAIL"}
+                        </div>
+                        {generationDebug.validationReasons?.map((reason) => (
+                          <div key={reason}>Reason: {reason}</div>
+                        ))}
                       </div>
                       <div className="panel">
                         <strong>ORIGINAL</strong>
