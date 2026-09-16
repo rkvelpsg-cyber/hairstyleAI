@@ -31,6 +31,7 @@ type Screen =
   | "colors"
   | "generating"
   | "result"
+  | "save"
   | "checkout";
 
 const CAPTURE_ORDER: HairView[] = ["front"];
@@ -74,6 +75,7 @@ export default function HairMirrorApp() {
   const [manualView, setManualView] = useState<HairView>("front");
   const [qr, setQr] = useState<string | null>(null);
   const [shareUrl, setShareUrl] = useState<string | null>(null);
+  const [saveLoading, setSaveLoading] = useState(false);
   const [lookCount, setLookCount] = useState(0);
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
@@ -507,27 +509,43 @@ export default function HairMirrorApp() {
       setManualView("front");
       setLookCount((x) => x + 1);
 
-      const session = await fetch("/api/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          resultImages: nextResults,
-          styleLabel: style.label,
-          colorLabel: color.label,
-        }),
-      });
-      const sessionData = await session.json();
-      if (sessionData?.url) {
-        setShareUrl(sessionData.url);
-        setQr(
-          await QRCode.toDataURL(sessionData.url, { width: 360, margin: 1 }),
-        );
-      }
       setScreen("result");
       speak("Your hairstyle preview is ready.");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Generation failed");
       setScreen("colors");
+    }
+  }
+
+  async function saveLook() {
+    if (!style || !color || !results.front || saveLoading) return;
+    setSaveLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/look", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          image: results.front,
+          styleLabel: style.label,
+          colorLabel: color.label,
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok || !data.ok || !data.url) {
+        throw new Error(data.error || "Unable to save your look");
+      }
+      setShareUrl(data.url);
+      setQr(await QRCode.toDataURL(data.url, { width: 320, margin: 2 }));
+      setScreen("save");
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error
+          ? saveError.message
+          : "Unable to save your look",
+      );
+    } finally {
+      setSaveLoading(false);
     }
   }
 
@@ -1042,18 +1060,13 @@ export default function HairMirrorApp() {
                   <b>₹{p.price}</b>
                 </div>
               ))}
-              {qr && (
-                <>
-                  <h3>Save your look</h3>
-                  <img className="qr" src={qr} alt="QR code" />
-                </>
-              )}
               <div className="actions" style={{ marginTop: 18 }}>
                 <button
                   className="btn primary"
-                  onClick={() => setScreen("checkout")}
+                  onClick={() => void saveLook()}
+                  disabled={saveLoading}
                 >
-                  Book This Look
+                  {saveLoading ? "Saving Your Look..." : "Keep This Look"}
                 </button>
                 <button
                   className="btn secondary"
@@ -1069,6 +1082,64 @@ export default function HairMirrorApp() {
                 </button>
                 <button className="btn secondary" onClick={beginCapture}>
                   Retake Photo
+                </button>
+              </div>
+              {error && <div className="panel luxeError">{error}</div>}
+            </aside>
+          </div>
+        </section>
+      )}
+
+      {screen === "save" && style && results.front && (
+        <section className="screen saveScreen">
+          <div className="top">
+            <div>
+              <span className="pill">Save Your Look</span>
+              <h1>Take your new look with you</h1>
+            </div>
+            <button className="btn secondary" onClick={reset}>
+              Finish
+            </button>
+          </div>
+          <div className="saveLayout">
+            <div className="panel printCard">
+              <span className="printBrand">LOTUS AI HAIRSTYLE MIRROR</span>
+              <img
+                className="savedLookImage"
+                src={results.front}
+                alt="Final AI hairstyle result"
+              />
+              <h2>Your New Look</h2>
+              <p>
+                {style.label} <span>•</span> {color.label}
+              </p>
+            </div>
+            <aside className="panel saveActions">
+              {qr && (
+                <img
+                  className="saveQr"
+                  src={qr}
+                  alt="Scan to get your AI hairstyle photo"
+                />
+              )}
+              <h2>Scan to get your photo</h2>
+              <p className="privacyNote">
+                Your hairstyle preview is stored temporarily. This link expires
+                in {Number(process.env.NEXT_PUBLIC_RESULT_EXPIRY_MINUTES || 60)}{" "}
+                minutes.
+              </p>
+              <div className="actions">
+                <button className="btn primary" onClick={() => window.print()}>
+                  Print My Look
+                </button>
+                <button
+                  className="btn secondary"
+                  onClick={() => setScreen("styles")}
+                >
+                  Try Another Look
+                </button>
+                <button className="btn secondary" onClick={reset}>
+                  Finish
                 </button>
               </div>
             </aside>
