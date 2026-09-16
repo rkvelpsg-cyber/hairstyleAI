@@ -554,26 +554,28 @@ export default function HairMirrorApp() {
 
       {screen === "welcome" && (
         <section className="screen center">
-          <span className="pill">AI Hair Preview</span>
-          <h1 className="hero">Find Your New Look</h1>
+          <span className="pill">AI Hair Experience</span>
+          <h1 className="hero">Find Your Signature Look</h1>
           <p className="sub">
-            Take one clear front photo, then preview a new hairstyle and colour.
+            See how a new hairstyle and colour could look on you - before making
+            the change.
           </p>
           <button className="btn primary" onClick={beginCapture}>
-            Start Front Capture
+            Begin My Hair Preview
           </button>
+          <span className="trustLine">
+            One photo • Private session • AI-powered preview
+          </span>
         </section>
       )}
 
       {screen === "capture" && (
         <section className="screen center">
-          <span className="pill">
-            View {captureIndex + 1} of {CAPTURE_ORDER.length}
-          </span>
-          <h1>{VIEW_LABEL[currentCapture]} Capture</h1>
+          <span className="pill">Your Hair Preview</span>
+          <h1>Let&apos;s capture your best angle</h1>
           <p className="sub">
             {currentCapture === "front" &&
-              "Face the camera directly. Keep your whole head and hair visible."}
+              "Look straight ahead and keep your full hair and shoulders comfortably inside the guide."}
           </p>
 
           <div className="camera">
@@ -595,19 +597,8 @@ export default function HairMirrorApp() {
               <div className="shutterFlash" aria-hidden="true" />
             )}
             <div className="note">
-              Good, even lighting gives better hair edges and colour.
+              ✦ For the most realistic result, use soft, even lighting.
             </div>
-          </div>
-
-          <div className="captureSteps">
-            {CAPTURE_ORDER.map((view, index) => (
-              <div
-                key={view}
-                className={`captureStep ${captures[view] ? "done" : ""} ${index === captureIndex ? "active" : ""}`}
-              >
-                {captures[view] ? "✓" : index + 1} {VIEW_LABEL[view]}
-              </div>
-            ))}
           </div>
 
           {cameraError && <div className="panel">{cameraError}</div>}
@@ -618,7 +609,7 @@ export default function HairMirrorApp() {
               disabled={!ready || !captureReady || countdown !== null}
               onClick={() => void startCountdown()}
             >
-              Capture {VIEW_LABEL[currentCapture]}
+              Capture My Photo
             </button>
             {cameraState === "camera_error" && (
               <button className="btn secondary" onClick={() => void start()}>
@@ -640,15 +631,15 @@ export default function HairMirrorApp() {
               Home
             </button>
           </div>
-          <h1>Choose an Indian hairstyle</h1>
+          <span className="pill">The Lookbook</span>
+          <h1>Choose Your Hairstyle</h1>
           <p className="sub">
-            Browse women, men, children and senior styles. The selected style is
-            applied to your front-view preview.
+            Explore a look, then let AI create it on your photo.
           </p>
           <section className="advisorPanel panel">
             <div className="top">
               <div>
-                <span className="pill">Local recommendations</span>
+                <span className="pill">Recommended for you</span>
                 <h2>Your AI Style Advisor</h2>
               </div>
               {advisorLoading && (
@@ -657,16 +648,6 @@ export default function HairMirrorApp() {
             </div>
             {advisor ? (
               <>
-                <div className="advisorProfile">
-                  <div>
-                    <span className="styleMeta">Approximate face shape</span>
-                    <strong>{advisor.faceShape}</strong>
-                  </div>
-                  <div>
-                    <span className="styleMeta">Visible styling notes</span>
-                    <span>{advisor.hairCharacteristics?.join(" • ")}</span>
-                  </div>
-                </div>
                 <p className="advisorExplanation">{advisor.explanation}</p>
                 <AdvisorRecommendations
                   title="Top hairstyle picks"
@@ -742,14 +723,14 @@ export default function HairMirrorApp() {
             className="styleSearch"
             value={styleSearch}
             onChange={(e) => setStyleSearch(e.target.value)}
-            placeholder="Search: Tamil bridal, butterfly cut, low fade, school braid…"
+            placeholder="Search hairstyles..."
           />
           <div className="styleCount">{filteredStyles.length} styles</div>
           <div className="grid">
             {filteredStyles.map((s) => (
               <button
                 key={s.id}
-                className="card"
+                className={`card ${style?.id === s.id ? "selected" : ""}`}
                 onClick={() => {
                   setStyle(s);
                   setScreen("colors");
@@ -762,9 +743,9 @@ export default function HairMirrorApp() {
                   {s.category}
                   {s.region ? ` • ${s.region}` : ""}
                 </div>
-                <div>
-                  Service from ₹{s.servicePrice.toLocaleString("en-IN")}
-                </div>
+                {style?.id === s.id && (
+                  <span className="selectedBadge">✓ Selected</span>
+                )}
               </button>
             ))}
           </div>
@@ -800,7 +781,7 @@ export default function HairMirrorApp() {
           <div className="top">
             <div>
               <div className="brand">{style.label}</div>
-              <div>Choose hair colour</div>
+              <div className="sectionLabel">Choose Your Colour</div>
             </div>
             <button
               className="btn secondary"
@@ -813,15 +794,17 @@ export default function HairMirrorApp() {
             {hairColors.map((c) => (
               <button
                 key={c.id}
-                className="card"
+                className={`card colorCard ${color.id === c.id ? "selected" : ""}`}
                 style={{ minHeight: 120 }}
                 onClick={() => setColor(c)}
               >
+                <span
+                  className={`colorSwatch color-${c.id}`}
+                  aria-hidden="true"
+                />
                 <h2>{c.label}</h2>
-                <div>
-                  {c.servicePrice
-                    ? `₹${c.servicePrice.toLocaleString("en-IN")}`
-                    : "Keep natural colour"}
+                <div className="styleMeta">
+                  {c.servicePrice ? "Salon colour" : "Keep natural colour"}
                 </div>
                 {color.id === c.id && <span className="pill">Selected</span>}
               </button>
@@ -891,9 +874,9 @@ export default function HairMirrorApp() {
       {screen === "generating" && (
         <section className="screen center">
           <div className="loading" />
-          <h1>Creating your hairstyle preview…</h1>
+          <h1>Creating Your Look…</h1>
           <p className="sub">
-            Generating your front-view preview with face preservation.
+            Our AI stylist is applying your selected hairstyle and colour.
           </p>
           <div className="progress">
             <div style={{ width: `${progress}%` }} />
@@ -1036,8 +1019,11 @@ export default function HairMirrorApp() {
             </div>
 
             <aside className="panel">
-              <span className="pill">Identity / Face Lock</span>
-              <h1>{style.label}</h1>
+              <span className="pill">Your New Look</span>
+              <h1>Meet Your New Look</h1>
+              <div className="resultDetails">
+                {style.label} <span>•</span> {color.label}
+              </div>
               <p>{color.label}</p>
               <div className="row">
                 <span>{style.serviceName}</span>
@@ -1073,7 +1059,7 @@ export default function HairMirrorApp() {
                   className="btn secondary"
                   onClick={() => setScreen("styles")}
                 >
-                  Try Another Style
+                  Try Another Look
                 </button>
                 <button
                   className="btn secondary"
