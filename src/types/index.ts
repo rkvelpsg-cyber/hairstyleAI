@@ -25,6 +25,7 @@ export type HairStyle = {
   serviceName: string;
   servicePrice: number;
   thumbnail: string;
+  generationQuality?: "verified" | "testing" | "experimental";
 };
 
 export type HairColor = {

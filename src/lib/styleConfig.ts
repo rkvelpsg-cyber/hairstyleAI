@@ -23,6 +23,7 @@ export type StyleProviderConfig = {
   endpoint: string;
   targetHairstyle?: string;
   validation: StyleValidationRules;
+  generationQuality: "verified" | "testing" | "experimental";
 };
 
 const STRUCTURED_ENDPOINT = "fal-ai/image-apps-v2/hair-change";
@@ -63,6 +64,19 @@ const STRUCTURED_BY_ID: Record<string, string> = {
   "senior-men-buzz": "buzz_cut",
 };
 
+const VERIFIED_STYLE_IDS = new Set([
+  "men-buzz-cut",
+  "men-crew",
+  "men-classic-side",
+  "men-curly",
+  "men-wavy",
+  "women-bob",
+  "women-pixie",
+  "women-straight",
+  "women-curls",
+  "women-u-cut",
+]);
+
 function validationFor(target?: string): StyleValidationRules {
   switch (target) {
     case "buzz_cut":
@@ -97,11 +111,17 @@ export function resolveStyleProvider(style: HairStyle): StyleProviderConfig {
         endpoint: STRUCTURED_ENDPOINT,
         targetHairstyle,
         validation: validationFor(targetHairstyle),
+        generationQuality: VERIFIED_STYLE_IDS.has(style.id)
+          ? "verified"
+          : "testing",
       }
     : {
         mode: "custom",
         endpoint: CUSTOM_ENDPOINT,
         validation: { family: "general" },
+        generationQuality: VERIFIED_STYLE_IDS.has(style.id)
+          ? "verified"
+          : "experimental",
       };
 }
 

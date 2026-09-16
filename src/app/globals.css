@@ -25,6 +25,73 @@ body {
   min-height: 100vh;
   background: radial-gradient(circle at top, #2b1f33, #0b0b10 55%);
 }
+.welcomeKiosk {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  overflow: hidden;
+  background: #050507;
+  cursor: pointer;
+  transition: opacity 400ms ease;
+}
+.welcomeKiosk.isLeaving {
+  opacity: 0;
+}
+.welcomeKioskVideo,
+.welcomeKioskShade {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.welcomeKioskVideo {
+  background: #050507;
+}
+.welcomeKioskShade {
+  background: linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.08) 35%,
+    rgba(0, 0, 0, 0.78) 100%
+  );
+}
+.welcomeKioskContent {
+  position: absolute;
+  z-index: 1;
+  left: 50%;
+  bottom: clamp(38px, 8vh, 150px);
+  width: min(92vw, 900px);
+  transform: translateX(-50%);
+  text-align: center;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.8);
+}
+.welcomeKioskContent h1 {
+  margin: 18px 0 10px;
+  font-size: clamp(32px, 5vw, 76px);
+}
+.welcomeKioskContent p {
+  margin: 0;
+  color: #fff;
+  font-size: clamp(18px, 2.2vw, 30px);
+}
+.welcomeKioskSalon {
+  display: block;
+  margin-top: 18px;
+  color: var(--muted);
+  font-size: clamp(15px, 1.5vw, 22px);
+}
+.idleWarning {
+  position: fixed;
+  z-index: 20;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 14px 22px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  font-weight: 800;
+}
 .screen {
   min-height: 100vh;
   padding: 28px;
@@ -108,6 +175,14 @@ body {
   height: 100%;
   object-fit: cover;
   transform: scaleX(-1);
+}
+.reviewPhoto {
+  width: min(92vw, 520px);
+  max-height: 62vh;
+  object-fit: contain;
+  border-radius: 20px;
+  background: #0f0f14;
+  border: 1px solid #3a3a4c;
 }
 .guide {
   position: absolute;

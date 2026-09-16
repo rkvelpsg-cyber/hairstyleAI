@@ -9,6 +9,7 @@ import { speak } from "@/lib/speech";
 import { localStyleAdvisor } from "@/lib/styleAdvisor/advisor";
 import { resolveColorProvider, resolveStyleProvider } from "@/lib/styleConfig";
 import { localStyleValidator } from "@/lib/styleValidation";
+import WelcomeVideo from "@/components/WelcomeVideo";
 import type {
   SalonStyleAdvice,
   Recommendation,
@@ -25,6 +26,7 @@ type Screen =
   | "attract"
   | "welcome"
   | "capture"
+  | "review"
   | "styles"
   | "colors"
   | "generating"
@@ -57,6 +59,7 @@ export default function HairMirrorApp() {
     providerMode?: string;
     endpoint?: string;
     providerTarget?: string;
+    generationQuality?: string;
     selectedColor?: string;
     providerColor?: string;
     validationPassed?: boolean;
@@ -75,9 +78,15 @@ export default function HairMirrorApp() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [countdown, setCountdown] = useState<1 | 2 | 3 | null>(null);
+  const [captureReady, setCaptureReady] = useState(false);
+  const [captureMessage, setCaptureMessage] = useState(
+    "Position your full head inside the guide.",
+  );
+  const captureReadyRef = useRef(false);
   const [shutterFlash, setShutterFlash] = useState(false);
   const [advisor, setAdvisor] = useState<SalonStyleAdvice | null>(null);
   const [advisorLoading, setAdvisorLoading] = useState(false);
+  const [idleWarning, setIdleWarning] = useState(false);
   const countdownTimerRef = useRef<number | null>(null);
   const countdownRunRef = useRef(0);
   const last = useRef(Date.now());
@@ -134,15 +143,50 @@ export default function HairMirrorApp() {
     const i = setInterval(() => {
       const ms =
         Number(process.env.NEXT_PUBLIC_IDLE_RESET_SECONDS || 90) * 1000;
-      if (screen !== "attract" && Date.now() - last.current > ms) reset();
+      const protectedScreen =
+        screen === "generating" || screen === "checkout" || countdown !== null;
+      const inactiveFor = Date.now() - last.current;
+      if (screen === "attract" || protectedScreen) return;
+      if (inactiveFor > ms + 5000) reset();
+      else if (inactiveFor > ms) setIdleWarning(true);
     }, 5000);
     return () => clearInterval(i);
-  }, [screen]);
+  }, [countdown, screen]);
 
   useEffect(() => {
     if (screen !== "capture") return;
     speak("Front view. Face the camera directly.");
   }, [screen, currentCapture]);
+
+  useEffect(() => {
+    if (screen !== "capture") return;
+    let active = true;
+    let checking = false;
+    const check = async () => {
+      const video = videoRef.current;
+      if (!active || checking || !ready || !video?.videoWidth) return;
+      checking = true;
+      try {
+        const quality = await validateFrontCapture(captureFrame(video));
+        if (!active) return;
+        captureReadyRef.current = quality.valid;
+        setCaptureReady(quality.valid);
+        setCaptureMessage(
+          quality.valid
+            ? "Perfect - Ready to capture"
+            : quality.message || "Adjust your position and lighting.",
+        );
+      } finally {
+        checking = false;
+      }
+    };
+    void check();
+    const timer = window.setInterval(() => void check(), 900);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, [ready, screen, videoRef]);
 
   useEffect(() => {
     if (screen !== "styles" || !captures.front) return;
@@ -171,6 +215,7 @@ export default function HairMirrorApp() {
 
   function act() {
     last.current = Date.now();
+    setIdleWarning(false);
   }
 
   function reset() {
@@ -180,6 +225,9 @@ export default function HairMirrorApp() {
       countdownTimerRef.current = null;
     }
     setCountdown(null);
+    setCaptureReady(false);
+    captureReadyRef.current = false;
+    setCaptureMessage("Position your full head inside the guide.");
     setScreen("attract");
     setCaptureIndex(0);
     setCaptures({});
@@ -201,6 +249,7 @@ export default function HairMirrorApp() {
     setShutterFlash(false);
     setAdvisor(null);
     setAdvisorLoading(false);
+    setIdleWarning(false);
   }
 
   function beginCapture() {
@@ -209,6 +258,9 @@ export default function HairMirrorApp() {
     setCaptures({});
     setAdvisor(null);
     setError(null);
+    setCaptureReady(false);
+    captureReadyRef.current = false;
+    setCaptureMessage("Position your full head inside the guide.");
     setScreen("capture");
   }
 
@@ -222,7 +274,13 @@ export default function HairMirrorApp() {
   }
 
   async function startCountdown() {
-    if (countdown !== null || !ready || !videoRef.current) return;
+    if (
+      countdown !== null ||
+      !ready ||
+      !captureReadyRef.current ||
+      !videoRef.current
+    )
+      return;
     if (
       videoRef.current.readyState < HTMLMediaElement.HAVE_CURRENT_DATA ||
       !videoRef.current.videoWidth ||
@@ -241,15 +299,30 @@ export default function HairMirrorApp() {
     setCountdown(1);
     announce(1);
     if (!(await waitForCountdown(1000, run))) return;
+    if (!captureReadyRef.current) {
+      setCountdown(null);
+      setError("Please hold still and try again.");
+      return;
+    }
     setCountdown(2);
     announce(2);
     if (!(await waitForCountdown(1000, run))) return;
+    if (!captureReadyRef.current) {
+      setCountdown(null);
+      setError("Please hold still and try again.");
+      return;
+    }
     setCountdown(3);
     announce(3);
     await new Promise<void>((resolve) =>
       window.requestAnimationFrame(() => resolve()),
     );
     if (countdownRunRef.current !== run) return;
+    if (!captureReadyRef.current) {
+      setCountdown(null);
+      setError("Please hold still and try again.");
+      return;
+    }
     await captureCurrentView();
     setCountdown(null);
   }
@@ -287,7 +360,7 @@ export default function HairMirrorApp() {
     setCaptures((prev) => ({ ...prev, [expected]: image }));
     if (quality.available !== false) setError(null);
 
-    setScreen("styles");
+    setScreen("review");
     speak(
       "Your front photo is captured. Now choose the hairstyle you would like to preview.",
     );
@@ -323,6 +396,8 @@ export default function HairMirrorApp() {
       providerMode: data.providerMode || styleConfig.mode,
       endpoint: data.endpoint || styleConfig.endpoint,
       providerTarget: data.providerTarget || styleConfig.targetHairstyle,
+      generationQuality:
+        data.generationQuality || styleConfig.generationQuality,
       selectedColor: data.selectedColor || color.label,
       providerColor: data.providerColor || providerColor,
       validationPassed: validation.passed,
@@ -363,6 +438,16 @@ export default function HairMirrorApp() {
       return;
     }
 
+    const capturedQuality = await validateFrontCapture(captures.front!);
+    if (!capturedQuality.valid) {
+      setError(
+        capturedQuality.message ||
+          "This photo may not give a realistic hairstyle preview.",
+      );
+      setScreen("review");
+      return;
+    }
+
     const maxLooks = Number(
       process.env.NEXT_PUBLIC_MAX_MULTI_VIEW_LOOKS_PER_SESSION || 3,
     );
@@ -390,6 +475,7 @@ export default function HairMirrorApp() {
         providerMode?: string;
         endpoint?: string;
         providerTarget?: string;
+        generationQuality?: string;
         selectedColor?: string;
         providerColor?: string;
         validationPassed?: boolean;
@@ -448,32 +534,22 @@ export default function HairMirrorApp() {
   return (
     <main className="app" onPointerDown={act}>
       {screen === "attract" && (
-        <section
-          className="attract"
-          onClick={() => {
+        <WelcomeVideo
+          salonName={salon}
+          onStart={() => {
+            act();
             setScreen("welcome");
             speak(
               `Welcome to ${salon}. Would you like to discover your new look?`,
             );
           }}
-        >
-          <video
-            src="/media/welcome.mp4"
-            autoPlay
-            loop
-            muted
-            playsInline
-            onError={(e) => (e.currentTarget.style.display = "none")}
-          />
-          <div className="attractContent">
-            <span className="pill">Lotus AI Beauty Mirror</span>
-            <h1 className="hero">Welcome to {salon}</h1>
-            <p className="sub">
-              Walk closer or tap to discover your next hairstyle.
-            </p>
-            <button className="btn primary">Start</button>
-          </div>
-        </section>
+        />
+      )}
+
+      {idleWarning && (
+        <div className="idleWarning" role="status">
+          Still there?
+        </div>
       )}
 
       {screen === "welcome" && (
@@ -506,7 +582,7 @@ export default function HairMirrorApp() {
             <div className="orientationBadge">
               {cameraState === "requesting_permission" && "Allow camera access"}
               {cameraState === "starting_camera" && "Starting camera..."}
-              {cameraState === "camera_ready" && "Camera ready"}
+              {cameraState === "camera_ready" && captureMessage}
               {cameraState === "camera_error" && "Camera unavailable"}
             </div>
             {countdown !== null && (
@@ -539,7 +615,7 @@ export default function HairMirrorApp() {
           <div className="actions">
             <button
               className="btn primary"
-              disabled={!ready || countdown !== null}
+              disabled={!ready || !captureReady || countdown !== null}
               onClick={() => void startCountdown()}
             >
               Capture {VIEW_LABEL[currentCapture]}
@@ -695,6 +771,30 @@ export default function HairMirrorApp() {
         </section>
       )}
 
+      {screen === "review" && captures.front && (
+        <section className="screen center">
+          <span className="pill">Photo review</span>
+          <h1>Check your front photo</h1>
+          <p className="sub">
+            Make sure your full hairstyle, face, shoulders, and surrounding
+            space are visible before continuing.
+          </p>
+          <img
+            className="reviewPhoto"
+            src={captures.front}
+            alt="Captured front photo"
+          />
+          <div className="actions">
+            <button className="btn secondary" onClick={beginCapture}>
+              Retake Photo
+            </button>
+            <button className="btn primary" onClick={() => setScreen("styles")}>
+              Continue
+            </button>
+          </div>
+        </section>
+      )}
+
       {screen === "colors" && style && (
         <section className="screen">
           <div className="top">
@@ -738,6 +838,10 @@ export default function HairMirrorApp() {
                 Selected Style ID: {generationDebug.selectedStyleId || style.id}
               </div>
               <div>Provider: {generationDebug.provider || "unknown"}</div>
+              <div>
+                Generation Quality:{" "}
+                {generationDebug.generationQuality || "unknown"}
+              </div>
               <div>
                 Provider Mode: {generationDebug.providerMode || "unknown"}
               </div>

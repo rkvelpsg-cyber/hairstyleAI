@@ -44,6 +44,7 @@ export async function POST(req: Request) {
       providerMode: styleConfig.mode,
       endpoint: styleConfig.endpoint,
       providerTarget: styleConfig.targetHairstyle,
+      generationQuality: styleConfig.generationQuality,
       selectedColor: selectedColor.label,
       providerColor,
     };
